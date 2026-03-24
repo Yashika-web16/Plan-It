@@ -1,4 +1,4 @@
-# Dhurandhar: The Revenge - Event & Venue Booking App
+# Plan-It- Event & Venue Booking App
 
 A premium, full-stack event and venue booking application built with React, Vite, and Firebase. This app features a high-end "BookMyShow" style experience with real-time booking, navigation, and admin management.
 
