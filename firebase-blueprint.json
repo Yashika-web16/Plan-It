@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Application user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["user", "organizer", "admin"] },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "Public event details",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "price": { "type": "number" },
+        "organizerId": { "type": "string" },
+        "capacity": { "type": "integer" },
+        "bookedCount": { "type": "integer" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["title", "date", "organizerId"]
+    },
+    "Venue": {
+      "title": "Venue",
+      "description": "Venue details for booking",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "capacity": { "type": "integer" },
+        "pricePerHour": { "type": "number" },
+        "description": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "themeCompatibility": { "type": "array", "items": { "type": "string" } },
+        "isHotel": { "type": "boolean" },
+        "isOpenAir": { "type": "boolean" }
+      },
+      "required": ["name", "location", "capacity"]
+    },
+    "Hotel": {
+      "title": "Hotel",
+      "description": "Hotel details for booking",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "capacity": { "type": "integer" },
+        "pricePerHour": { "type": "number" },
+        "description": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "themeCompatibility": { "type": "array", "items": { "type": "string" } },
+        "stars": { "type": "integer" },
+        "roomCount": { "type": "integer" },
+        "amenities": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["name", "location", "capacity", "stars"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Event or venue booking record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "eventId": { "type": "string" },
+        "venueId": { "type": "string" },
+        "type": { "type": "string", "enum": ["ticket", "venue"] },
+        "status": { "type": "string", "enum": ["confirmed", "pending", "cancelled"] },
+        "totalAmount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/events/{eventId}": {
+      "schema": "Event",
+      "description": "Public events"
+    },
+    "/venues/{venueId}": {
+      "schema": "Venue",
+      "description": "Available venues"
+    },
+    "/hotels/{hotelId}": {
+      "schema": "Hotel",
+      "description": "Available hotels"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "User bookings"
+    }
+  }
+}

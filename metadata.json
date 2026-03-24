@@ -1,0 +1,5 @@
+{
+  "name": "Plan-It",
+  "description": "An intelligent event planning and booking platform with AI-powered recommendations and invitation generation.",
+  "requestFramePermissions": ["geolocation"]
+}
