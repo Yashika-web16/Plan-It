@@ -26,7 +26,7 @@ export default function App() {
         
         {/* Footer */}
         <footer className="max-w-7xl mx-auto px-6 py-12 border-t border-white/10 mt-20 text-center text-white/40 text-sm">
-          <p>© 2026 Plan-It. All rights reserved. Built with AI for Gen-Z.</p>
+          <p>© 2026 Plan-It. All rights reserved. Built by Yashika for Gen-Z.</p>
         </footer>
       </div>
     </Router>

@@ -1,21 +1,37 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, getDocFromServer, Timestamp } from 'firebase/firestore';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut
+} from 'firebase/auth';
+import {
+  getFirestore,
+  doc,
+  getDocFromServer
+} from 'firebase/firestore';
 
-// Import the Firebase configuration
+// Import Firebase config (JSON)
 import firebaseConfig from '../firebase-applet-config.json';
 
-// Initialize Firebase SDK
+// 🔥 Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth();
+
+// ✅ Firestore
+export const db = getFirestore(app);
+
+// ✅ Auth
+export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Auth Helpers
+// ✅ Auth helpers
 export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);
 export const logout = () => signOut(auth);
 
-// Firestore Error Handler
+// ==============================
+// 🔥 ERROR HANDLING (FIXES YOUR ERROR)
+// ==============================
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -32,49 +48,39 @@ export interface FirestoreErrorInfo {
   authInfo: {
     userId: string | undefined;
     email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
+  };
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
+    operationType,
+    path,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
     },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  };
+
+  console.error('🔥 Firestore Error:', errInfo);
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Connection Test
+// ==============================
+// 🔌 CONNECTION TEST (OPTIONAL)
+// ==============================
+
 async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log('✅ Firebase connected successfully');
   } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. ");
-    }
+    console.error('❌ Firebase connection issue:', error);
   }
 }
+
 testConnection();
