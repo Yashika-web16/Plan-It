@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Sparkles, Wallet, ListTodo, Users2, CheckCircle2, Circle } from "lucide-react";
+import { X, Sparkles, Wallet, ListTodo, Users2, CheckCircle2, Circle, Mail } from "lucide-react";
 import { GlassCard, cn } from "./GlassCard";
 import { BudgetItem, PlanItem, Guest } from "../types";
 
@@ -19,8 +19,6 @@ interface PlanModalProps {
 }
 
 export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
-  const totalBudget = plan.budgetBreakdown?.reduce((acc, item) => acc + (Number(item.estimatedCost) || 0), 0) || 0;
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <motion.div
@@ -38,6 +36,7 @@ export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
         className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden"
       >
         <GlassCard className="h-full flex flex-col p-0 overflow-hidden">
+          {/* Header */}
           <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-brand-primary/20 flex items-center justify-center">
@@ -56,7 +55,9 @@ export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
             </button>
           </div>
 
+          {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
+            {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
                 <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Budget</p>
@@ -76,6 +77,7 @@ export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
               </div>
             </div>
 
+            {/* Themes */}
             {plan.themes && plan.themes.length > 0 && (
               <section>
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -93,9 +95,10 @@ export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
             )}
 
             <div className="grid md:grid-cols-2 gap-8">
+              {/* Budget */}
               <section>
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <Wallet className="w-5 h-5 text-brand-accent" /> Budget Breakdown (₹{totalBudget.toLocaleString()})
+                  <Wallet className="w-5 h-5 text-brand-accent" /> Budget Breakdown (₹{(plan.budgetBreakdown?.reduce((acc, item) => acc + (Number(item.estimatedCost) || 0), 0) || 0).toLocaleString()})
                 </h3>
                 <div className="space-y-3">
                   {plan.budgetBreakdown?.map((item, i) => (
@@ -117,6 +120,7 @@ export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
                 </div>
               </section>
 
+              {/* Checklist */}
               <section>
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                   <ListTodo className="w-5 h-5 text-brand-secondary" /> Checklist
@@ -143,16 +147,26 @@ export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                   <Users2 className="w-5 h-5 text-brand-accent" /> Guest List
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {plan.guests.map((guest, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
-                      <div className="w-8 h-8 rounded-full bg-brand-secondary/20 flex items-center justify-center text-xs text-brand-secondary font-bold">
-                        {guest.name[0]}
+                    <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-brand-secondary/20 flex items-center justify-center text-brand-secondary font-bold">
+                          {guest.name[0]}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{guest.name}</p>
+                          <p className="text-[10px] text-white/40 flex items-center gap-1">
+                            <Mail className="w-2 h-2" /> {guest.email}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{guest.name}</p>
-                        <p className="text-[10px] text-white/40">{guest.status}</p>
-                      </div>
+                      <span className={cn(
+                        "text-[8px] px-2 py-1 rounded-full font-bold uppercase", 
+                        guest.status === 'Invited' ? "bg-brand-secondary/20 text-brand-secondary" : "bg-white/10 text-white/40"
+                      )}>
+                        {guest.status}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -160,6 +174,7 @@ export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
             )}
           </div>
 
+          {/* Footer */}
           <div className="p-6 border-t border-white/10 bg-white/5 flex justify-end">
             <button 
               onClick={onClose}

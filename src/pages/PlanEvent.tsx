@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Send, Bot, User, Loader2, Calendar, MapPin, DollarSign, Users, Save, CheckCircle2, Circle, Plus, Trash2, ChevronRight, ListTodo, Wallet, Users2 } from "lucide-react";
+import { Sparkles, Send, Bot, User, Loader2, Calendar, MapPin, DollarSign, Users, Save, CheckCircle2, Circle, Plus, Trash2, ChevronRight, ListTodo, Wallet, Users2, Mail } from "lucide-react";
 import { GlassCard, cn } from "../components/GlassCard";
 import { aiService } from "../services/aiService";
 import { useAuth } from "../AuthContext";
@@ -22,6 +22,7 @@ export const PlanEvent = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [sendingInvite, setSendingInvite] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
@@ -42,6 +43,25 @@ export const PlanEvent = () => {
       setFormData(prev => ({ ...prev, location: selectedLocation }));
     }
   }, [selectedLocation]);
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+    
+    const userMsg = input;
+    setInput("");
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setLoading(true);
+
+    try {
+      const response = await aiService.chatAssistant(userMsg, []);
+      setMessages(prev => [...prev, { role: 'bot', text: response || "I'm not sure how to respond to that." }]);
+    } catch (error) {
+      console.error(error);
+      setMessages(prev => [...prev, { role: 'bot', text: "Oops! My AI brain hit a snag. Try again? 😅" }]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -77,25 +97,6 @@ export const PlanEvent = () => {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
-    
-    const userMsg = input;
-    setInput("");
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-    setLoading(true);
-
-    try {
-      const response = await aiService.chatAssistant(userMsg, []);
-      setMessages(prev => [...prev, { role: 'bot', text: response || "I'm not sure how to respond to that." }]);
-    } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, { role: 'bot', text: "Oops! My AI brain hit a snag. Try again? 😅" }]);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleAiRecommendations = async () => {
@@ -171,11 +172,66 @@ export const PlanEvent = () => {
   };
 
   const addGuest = () => {
-    setGuests([...guests, { name: "New Guest", status: "Pending" }]);
+    const newGuest: Guest = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: "",
+      email: "",
+      status: "Pending"
+    };
+    setGuests([...guests, newGuest]);
   };
 
-  const removeGuest = (index: number) => {
-    setGuests(guests.filter((_, i) => i !== index));
+  const updateGuest = (id: string, updates: Partial<Guest>) => {
+    setGuests(guests.map(g => g.id === id ? { ...g, ...updates } : g));
+  };
+
+  const removeGuest = (id: string) => {
+    setGuests(guests.filter(g => g.id !== id));
+  };
+
+  const handleSendInvite = async (guest: Guest) => {
+    if (!guest.email || !guest.name) {
+      alert("Please fill in the guest's name and email first!");
+      return;
+    }
+
+    setSendingInvite(guest.id);
+    try {
+      const inviteText = await aiService.generateInvitation({
+        ...formData,
+        guestName: guest.name
+      });
+
+      const subject = `You're Invited: ${formData.type.toUpperCase()}! ✨`;
+      
+      // Call server-side API for real email sending
+      const response = await fetch('/api/send-invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: guest.email,
+          name: guest.name,
+          subject: subject,
+          body: inviteText
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to send email");
+      }
+      
+      // Update status
+      updateGuest(guest.id, { status: 'Invited', invitedAt: new Date().toISOString() });
+      alert(`Invitation sent successfully to ${guest.name}! 💌`);
+    } catch (error: any) {
+      console.error("Invite error:", error);
+      alert(`Failed to send invite: ${error.message}. Make sure RESEND_API_KEY is configured in settings.`);
+    } finally {
+      setSendingInvite(null);
+    }
   };
 
   return (
@@ -457,33 +513,75 @@ export const PlanEvent = () => {
                     </button>
                   </div>
                   
-                  <div className="space-y-3">
-                    {guests.map((guest, i) => (
-                      <div key={i} className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 group">
-                        <div className="w-10 h-10 rounded-full bg-brand-secondary/20 flex items-center justify-center text-brand-secondary font-bold">
-                          {guest.name[0]}
+                  <div className="space-y-4">
+                    {guests.map((guest) => (
+                      <div key={guest.id} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-4 group relative">
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase text-white/40 font-bold tracking-widest">Guest Name</label>
+                            <div className="flex items-center gap-2 bg-black/20 rounded-lg px-3 py-2 border border-white/5">
+                              <User className="w-4 h-4 text-brand-secondary" />
+                              <input 
+                                type="text" 
+                                value={guest.name} 
+                                onChange={(e) => updateGuest(guest.id, { name: e.target.value })} 
+                                placeholder="Full Name" 
+                                className="bg-transparent border-none focus:ring-0 p-0 text-sm w-full" 
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase text-white/40 font-bold tracking-widest">Email Address</label>
+                            <div className="flex items-center gap-2 bg-black/20 rounded-lg px-3 py-2 border border-white/5">
+                              <Mail className="w-4 h-4 text-brand-primary" />
+                              <input 
+                                type="email" 
+                                value={guest.email} 
+                                onChange={(e) => updateGuest(guest.id, { email: e.target.value })} 
+                                placeholder="email@example.com" 
+                                className="bg-transparent border-none focus:ring-0 p-0 text-sm w-full" 
+                              />
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <input 
-                            type="text" 
-                            value={guest.name}
-                            onChange={(e) => {
-                              const newGuests = [...guests];
-                              newGuests[i].name = e.target.value;
-                              setGuests(newGuests);
-                            }}
-                            className="bg-transparent border-none focus:ring-0 p-0 font-medium w-full"
-                          />
-                          <p className="text-xs text-white/40">{guest.status}</p>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                          <div className="flex items-center gap-3">
+                            <span className={cn(
+                              "text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-tighter", 
+                              guest.status === 'Invited' ? "bg-brand-secondary/20 text-brand-secondary" : "bg-white/10 text-white/40"
+                            )}>
+                              {guest.status}
+                            </span>
+                            {guest.invitedAt && (
+                              <span className="text-[10px] text-white/30 italic">
+                                Sent {new Date(guest.invitedAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => handleSendInvite(guest)} 
+                              disabled={sendingInvite === guest.id} 
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase hover:bg-brand-primary hover:text-white transition-all"
+                            >
+                              {sendingInvite === guest.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} 
+                              Send Invite
+                            </button>
+                            <button 
+                              onClick={() => removeGuest(guest.id)} 
+                              className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <button onClick={() => removeGuest(i)} className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
                     ))}
                     {guests.length === 0 && (
                       <div className="text-center py-10 text-white/40">
-                        Start adding guests to your event!
+                        No guests added yet. Click "Add Guest" to start!
                       </div>
                     )}
                   </div>

@@ -75,7 +75,10 @@ export interface BudgetItem {
 }
 
 export interface Guest {
+  id: string;
   name: string;
-  email?: string;
-  status: 'Invited' | 'Confirmed' | 'Declined' | 'Pending';
+  email: string;
+  phone?: string;
+  status: 'Pending' | 'Invited' | 'Confirmed' | 'Declined';
+  invitedAt?: string;
 }
