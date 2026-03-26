@@ -54,8 +54,28 @@ export interface Booking {
   location?: string;
   seatType?: string;
   addFood?: boolean;
-  type: 'ticket' | 'venue';
+  type: 'ticket' | 'venue' | 'plan';
   status: 'confirmed' | 'pending' | 'cancelled';
   totalAmount: number;
   date: string;
+  details?: any;
+}
+
+export interface PlanItem {
+  task: string;
+  completed: boolean;
+  timeline?: string;
+}
+
+export interface BudgetItem {
+  category: string;
+  estimatedCost: number;
+  actualCost?: number;
+  priority: 'High' | 'Medium' | 'Low';
+}
+
+export interface Guest {
+  name: string;
+  email?: string;
+  status: 'Invited' | 'Confirmed' | 'Declined' | 'Pending';
 }
