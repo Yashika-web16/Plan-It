@@ -1,5 +1,5 @@
 {
-  "name": "Plan-It",
-  "description": "An intelligent event planning and booking platform with AI-powered recommendations and invitation generation.",
+  "name": "VendorVision",
+  "description": "Real-world vendor search using Google Maps grounding for event planning.",
   "requestFramePermissions": ["geolocation"]
 }

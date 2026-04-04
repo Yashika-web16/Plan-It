@@ -3,8 +3,7 @@ import { Navbar } from "./components/Navbar";
 import { Home } from "./pages/Home";
 import { PlanEvent } from "./pages/PlanEvent";
 import { Discover } from "./pages/Discover";
-import { Venues } from "./pages/Venues";
-import { Hotels } from "./pages/Hotels";
+import { VendorSearch } from "./pages/VendorSearch";
 import { Dashboard } from "./pages/Dashboard";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -18,15 +17,14 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/discover" element={<Discover />} />
             <Route path="/plan" element={<PlanEvent />} />
-            <Route path="/venues" element={<Venues />} />
-            <Route path="/hotels" element={<Hotels />} />
+            <Route path="/vendors" element={<VendorSearch />} />
             <Route path="/dashboard" element={<Dashboard />} />
           </Routes>
         </AnimatePresence>
         
         {/* Footer */}
         <footer className="max-w-7xl mx-auto px-6 py-12 border-t border-white/10 mt-20 text-center text-white/40 text-sm">
-          <p>© 2026 Plan-It. All rights reserved. Built by Yashika for Gen-Z.</p>
+          <p>© 2026 Plan-It. All rights reserved. Made by Yashika.</p>
         </footer>
       </div>
     </Router>
