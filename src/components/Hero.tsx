@@ -24,15 +24,15 @@ export const Hero = () => {
           </h1>
           
           <p className="text-xl text-white/60 mb-10 max-w-lg leading-relaxed">
-            Discover trending events, book premium venues, and let our AI handle the details. From weddings to concerts, we've got you covered.
+            Find real-world vendors with our intelligent search. From concept to reality, we've got you covered.
           </p>
           
           <div className="flex flex-wrap gap-4">
             <Link to="/discover" className="btn-primary flex items-center gap-2 text-lg">
               Explore Events <ArrowRight className="w-5 h-5" />
             </Link>
-            <Link to="/plan" className="btn-secondary flex items-center gap-2 text-lg">
-              Start Planning <Calendar className="w-5 h-5" />
+            <Link to="/vendors" className="btn-secondary flex items-center gap-2 text-lg">
+              Find Vendors <MapPin className="w-5 h-5" />
             </Link>
           </div>
         </motion.div>

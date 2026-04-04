@@ -39,9 +39,10 @@ export const Navbar = () => {
         
         <div className="hidden md:flex items-center gap-8 text-sm font-medium">
           <Link to="/discover" className="hover:text-brand-primary transition-colors">Discover</Link>
+          <Link to="/vendors" className="hover:text-brand-accent transition-colors flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5" /> Vendor Search
+          </Link>
           <Link to="/plan" className="hover:text-brand-secondary transition-colors">Plan Event</Link>
-          <Link to="/venues" className="hover:text-brand-accent transition-colors">Venues</Link>
-          <Link to="/hotels" className="hover:text-brand-secondary transition-colors">Hotels</Link>
         </div>
         
         <div className="flex items-center gap-4">

@@ -6,7 +6,7 @@ import { Event } from "../types";
 import { motion } from "framer-motion";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { collection, query, limit, onSnapshot } from "firebase/firestore";
-import { Calendar, Users, Sparkles, MapPin } from "lucide-react";
+import { Calendar, Users, Sparkles, MapPin, ArrowRight } from "lucide-react";
 import { useLocation } from "../LocationContext";
 
 export const Home = () => {
@@ -80,29 +80,18 @@ export const Home = () => {
       
       <section className="bg-white/5 py-20 px-6">
         <div className="max-w-7xl mx-auto text-center">
-          <h2 className="text-4xl font-bold font-display mb-12">Plan Your Own Event</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="p-8 rounded-3xl glass hover:bg-white/15 transition-all">
-              <div className="w-16 h-16 rounded-2xl bg-brand-primary/20 flex items-center justify-center mx-auto mb-6">
-                <Calendar className="w-8 h-8 text-brand-primary" />
+          <h2 className="text-4xl font-bold font-display mb-12">AI-Powered Planning Tools</h2>
+          <div className="grid md:grid-cols-1 max-w-2xl mx-auto gap-8">
+            <Link to="/vendors" className="p-8 rounded-3xl glass hover:bg-white/15 transition-all text-left group">
+              <div className="w-16 h-16 rounded-2xl bg-brand-secondary/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <MapPin className="w-8 h-8 text-brand-secondary" />
               </div>
-              <h3 className="text-xl font-bold mb-4">Weddings</h3>
-              <p className="text-white/50 text-sm">Create the perfect wedding with our AI-powered venue and theme suggestions.</p>
-            </div>
-            <div className="p-8 rounded-3xl glass hover:bg-white/15 transition-all">
-              <div className="w-16 h-16 rounded-2xl bg-brand-secondary/20 flex items-center justify-center mx-auto mb-6">
-                <Users className="w-8 h-8 text-brand-secondary" />
-              </div>
-              <h3 className="text-xl font-bold mb-4">Parties</h3>
-              <p className="text-white/50 text-sm">From birthdays to anniversaries, plan a celebration your guests will never forget.</p>
-            </div>
-            <div className="p-8 rounded-3xl glass hover:bg-white/15 transition-all">
-              <div className="w-16 h-16 rounded-2xl bg-brand-accent/20 flex items-center justify-center mx-auto mb-6">
-                <Sparkles className="w-8 h-8 text-brand-accent" />
-              </div>
-              <h3 className="text-xl font-bold mb-4">Corporate</h3>
-              <p className="text-white/50 text-sm">Professional event planning for summits, workshops, and networking events.</p>
-            </div>
+              <h3 className="text-2xl font-bold mb-4">Real Vendor Search</h3>
+              <p className="text-white/50 text-sm mb-6">Find top-rated local vendors, photographers, and caterers verified by Google Maps.</p>
+              <span className="text-brand-secondary font-bold flex items-center gap-2">
+                Search Vendors <ArrowRight className="w-4 h-4" />
+              </span>
+            </Link>
           </div>
         </div>
       </section>
