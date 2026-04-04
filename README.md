@@ -19,5 +19,5 @@ A premium, full-stack event and venue booking application built with React, Vite
 - **Animations**: Framer Motion
 - **Icons**: Lucide React
 - **Backend/DB**: Firebase (Firestore & Authentication)
-- **Payments**: Stripe Integration (Optional)
+- **Payments**: Stripe Integration 
  
