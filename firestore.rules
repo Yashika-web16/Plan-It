@@ -7,53 +7,46 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-    
     function isAdmin() {
       return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         (request.auth.token.email == "seema.nagdev16@gmail.com" && request.auth.token.email_verified == true));
+        (
+          (request.auth.token.get('email', '') == "seema.nagdev16@gmail.com") ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
     }
 
-    function isOrganizer() {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'organizer';
+    // Public Collections - allow read to everyone
+    match /events/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /venues/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /hotels/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // User Profiles
+    // Private Collections
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && request.resource.data.role == 'user';
-      allow update: if isOwner(userId) && (request.resource.data.role == resource.data.role || isAdmin());
+      allow write: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Events
-    match /events/{eventId} {
-      allow read: if true;
-      allow create: if isAdmin() || isOrganizer();
-      allow update: if isAdmin() || (isOrganizer() && resource.data.organizerId == request.auth.uid);
-      allow delete: if isAdmin();
-    }
-
-    // Venues
-    match /venues/{venueId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Hotels
-    match /hotels/{hotelId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Bookings
     match /bookings/{bookingId} {
+      allow get: if true; // Allow guests to view invitation details via link
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin();
+      allow update: if (isAdmin()) || 
+                      (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['details']) && 
+                       request.resource.data.details.diff(resource.data.details).affectedKeys().hasOnly(['guests']));
+      allow delete: if isAdmin();
     }
+    
+    // No catch-all needed if everything is explicitly defined
   }
 }

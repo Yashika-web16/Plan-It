@@ -82,3 +82,11 @@ export interface Guest {
   status: 'Pending' | 'Invited' | 'Confirmed' | 'Declined';
   invitedAt?: string;
 }
+
+export interface ScavengerMission {
+  id: string;
+  mission: string;
+  description: string;
+  points: number;
+  completed?: boolean;
+}
