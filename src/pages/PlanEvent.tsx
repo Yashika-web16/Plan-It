@@ -1,20 +1,20 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Send, Bot, User, Loader2, Calendar, MapPin, DollarSign, Users, Save, CheckCircle2, Circle, Plus, Trash2, ChevronRight, ListTodo, Wallet, Users2, Mail } from "lucide-react";
+import { Sparkles, Send, Bot, User, Loader2, Calendar, MapPin, DollarSign, Users, Save, CheckCircle2, Circle, Plus, Trash2, ChevronRight, ListTodo, Wallet, Users2, Mail, Copy, Check } from "lucide-react";
 import { GlassCard, cn } from "../components/GlassCard";
 import { aiService } from "../services/aiService";
 import { useAuth } from "../AuthContext";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { collection, addDoc } from "firebase/firestore";
 import { useLocation } from "../LocationContext";
-import { BudgetItem, PlanItem, Guest } from "../types";
+import { BudgetItem, PlanItem, Guest, ScavengerMission } from "../types";
 
 import { InvitationGenerator } from "../components/InvitationGenerator";
 
 export const PlanEvent = () => {
   const { user } = useAuth();
   const { selectedLocation } = useLocation();
-  const [activeTab, setActiveTab] = useState<'details' | 'budget' | 'checklist' | 'guests'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'budget' | 'checklist' | 'guests' | 'scavenger'>('details');
   const [messages, setMessages] = useState<{ role: 'user' | 'bot', text: string }[]>([
     { role: 'bot', text: "Hey! I'm your Plan-It assistant. What kind of event are we dreaming up today? ✨" }
   ]);
@@ -23,6 +23,8 @@ export const PlanEvent = () => {
   const [saving, setSaving] = useState(false);
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [sendingInvite, setSendingInvite] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedBookingId, setSavedBookingId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
@@ -37,6 +39,8 @@ export const PlanEvent = () => {
   const [budgetBreakdown, setBudgetBreakdown] = useState<BudgetItem[]>([]);
   const [checklist, setChecklist] = useState<PlanItem[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
+  const [scavengerHunt, setScavengerHunt] = useState<ScavengerMission[]>([]);
+  const [generatingHunt, setGeneratingHunt] = useState(false);
 
   useEffect(() => {
     if (selectedLocation) {
@@ -110,10 +114,30 @@ export const PlanEvent = () => {
       if (plan.themes) setThemes(plan.themes);
       
       if (plan.budgetBreakdown) {
-        const sanitizedBudget = plan.budgetBreakdown.map((item: any) => ({
+        const targetBudget = Number(formData.budget);
+        const totalReturned = plan.budgetBreakdown.reduce((acc: number, item: any) => acc + (Number(item.estimatedCost) || 0), 0);
+        
+        let sanitizedBudget = plan.budgetBreakdown.map((item: any) => ({
           ...item,
           estimatedCost: Number(item.estimatedCost) || 0
         }));
+
+        // If the AI hallucinated a different budget (more than 1% difference), normalize it
+        if (totalReturned > 0 && Math.abs(totalReturned - targetBudget) > (targetBudget * 0.01)) {
+          const ratio = targetBudget / totalReturned;
+          sanitizedBudget = sanitizedBudget.map((item: any) => ({
+            ...item,
+            estimatedCost: Math.round(item.estimatedCost * ratio)
+          }));
+          
+          // Adjust the last item to handle rounding errors
+          const newTotal = sanitizedBudget.reduce((acc, item) => acc + item.estimatedCost, 0);
+          const diff = targetBudget - newTotal;
+          if (diff !== 0 && sanitizedBudget.length > 0) {
+            sanitizedBudget[sanitizedBudget.length - 1].estimatedCost += diff;
+          }
+        }
+        
         setBudgetBreakdown(sanitizedBudget);
       }
       
@@ -121,11 +145,33 @@ export const PlanEvent = () => {
       
       setMessages(prev => [...prev, { role: 'bot', text: "I've generated a complete plan for you! Check the Budget and Checklist tabs. 🚀" }]);
       setActiveTab('budget');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setMessages(prev => [...prev, { role: 'bot', text: "I couldn't generate a structured plan. Let's keep chatting instead!" }]);
+      const errorMsg = error.message?.includes("Quota Exceeded") 
+        ? error.message 
+        : "I couldn't generate a structured plan. Let's keep chatting instead!";
+      setMessages(prev => [...prev, { role: 'bot', text: errorMsg }]);
     } finally {
       setAiAnalyzing(false);
+    }
+  };
+
+  const handleGenerateScavengerHunt = async () => {
+    if (!validateForm()) {
+      alert("Please fill in the event details first!");
+      return;
+    }
+    setGeneratingHunt(true);
+    try {
+      const hunt = await aiService.generateScavengerHunt(formData);
+      setScavengerHunt(hunt.map((m: any) => ({ ...m, completed: false })));
+      setMessages(prev => [...prev, { role: 'bot', text: "Boom! 💥 Your AI Scavenger Hunt is ready. Check the new tab!" }]);
+      setActiveTab('scavenger');
+    } catch (error: any) {
+      console.error(error);
+      alert("Failed to generate scavenger hunt. " + error.message);
+    } finally {
+      setGeneratingHunt(false);
     }
   };
 
@@ -142,7 +188,7 @@ export const PlanEvent = () => {
 
     setSaving(true);
     try {
-      await addDoc(collection(db, "bookings"), {
+      const docRef = await addDoc(collection(db, "bookings"), {
         userId: user.uid,
         type: 'plan',
         status: 'pending',
@@ -153,10 +199,12 @@ export const PlanEvent = () => {
           themes,
           budgetBreakdown,
           checklist,
-          guests
+          guests,
+          scavengerHunt
         },
         createdAt: new Date().toISOString()
       });
+      setSavedBookingId(docRef.id);
       alert("Plan saved to your dashboard! 🚀");
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, "bookings");
@@ -189,9 +237,18 @@ export const PlanEvent = () => {
     setGuests(guests.filter(g => g.id !== id));
   };
 
+  const toggleMission = (id: string) => {
+    setScavengerHunt(scavengerHunt.map(m => m.id === id ? { ...m, completed: !m.completed } : m));
+  };
+
   const handleSendInvite = async (guest: Guest) => {
     if (!guest.email || !guest.name) {
       alert("Please fill in the guest's name and email first!");
+      return;
+    }
+
+    if (!savedBookingId) {
+      alert("Please save your plan first to generate an RSVP link! 💾");
       return;
     }
 
@@ -203,6 +260,7 @@ export const PlanEvent = () => {
       });
 
       const subject = `You're Invited: ${formData.type.toUpperCase()}! ✨`;
+      const rsvpLink = `${window.location.origin}/rsvp/${savedBookingId}?guestId=${guest.id}&name=${encodeURIComponent(guest.name)}`;
       
       // Call server-side API for real email sending
       const response = await fetch('/api/send-invite', {
@@ -214,7 +272,8 @@ export const PlanEvent = () => {
           email: guest.email,
           name: guest.name,
           subject: subject,
-          body: inviteText
+          body: inviteText,
+          rsvpLink: rsvpLink
         }),
       });
 
@@ -234,6 +293,36 @@ export const PlanEvent = () => {
     }
   };
 
+  const handleCopyInviteLink = (guest: Guest) => {
+    if (!savedBookingId) {
+      alert("Please save your plan first to generate an RSVP link! 💾");
+      return;
+    }
+
+    const rsvpLink = `${window.location.origin}/rsvp/${savedBookingId}?guestId=${guest.id}&name=${encodeURIComponent(guest.name)}`;
+    
+    // Fallback for clipboard copying
+    try {
+      navigator.clipboard.writeText(rsvpLink).then(() => {
+        setCopiedId(guest.id);
+        setTimeout(() => setCopiedId(null), 2000);
+      }).catch(err => {
+        console.error('Failed to copy: ', err);
+        // Manual fallback
+        const textArea = document.createElement("textarea");
+        textArea.value = rsvpLink;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopiedId(guest.id);
+        setTimeout(() => setCopiedId(null), 2000);
+      });
+    } catch (err) {
+      console.error('Clipboard API error: ', err);
+    }
+  };
+
   return (
     <div className="pt-32 px-6 max-w-7xl mx-auto pb-20">
       <div className="grid lg:grid-cols-3 gap-12">
@@ -245,19 +334,20 @@ export const PlanEvent = () => {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 p-1 glass rounded-2xl w-fit">
+          <div className="flex gap-2 p-1.5 glass rounded-full w-fit overflow-x-auto max-w-full no-scrollbar">
             {[
               { id: 'details', icon: Sparkles, label: 'Details' },
               { id: 'budget', icon: Wallet, label: 'Budget' },
               { id: 'checklist', icon: ListTodo, label: 'Checklist' },
-              { id: 'guests', icon: Users2, label: 'Guests' }
+              { id: 'guests', icon: Users2, label: 'Guests' },
+              { id: 'scavenger', icon: Bot, label: 'Scavenger Hunt' }
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
-                  activeTab === tab.id ? "bg-brand-primary text-white shadow-lg" : "hover:bg-white/5 text-white/60"
+                  "flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all",
+                  activeTab === tab.id ? "bg-white text-black shadow-lg" : "hover:bg-white/5 text-white/40"
                 )}
               >
                 <tab.icon className="w-4 h-4" />
@@ -433,10 +523,10 @@ export const PlanEvent = () => {
                         <div>
                           <p className="font-medium">{item.category}</p>
                           <span className={cn(
-                            "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
-                            item.priority === 'High' ? "bg-red-500/20 text-red-500" :
-                            item.priority === 'Medium' ? "bg-yellow-500/20 text-yellow-500" :
-                            "bg-green-500/20 text-green-500"
+                            "mono-tag mt-2 inline-block",
+                            item.priority === 'High' ? "text-red-400 border-red-400/20 bg-red-400/5" :
+                            item.priority === 'Medium' ? "text-yellow-400 border-yellow-400/20 bg-yellow-400/5" :
+                            "text-green-400 border-green-400/20 bg-green-400/5"
                           )}>
                             {item.priority} Priority
                           </span>
@@ -508,9 +598,19 @@ export const PlanEvent = () => {
                     <h3 className="text-xl font-bold flex items-center gap-2">
                       <Users2 className="w-5 h-5 text-brand-secondary" /> Guest List
                     </h3>
-                    <button onClick={addGuest} className="btn-secondary py-2 px-4 text-xs flex items-center gap-2">
-                      <Plus className="w-4 h-4" /> Add Guest
-                    </button>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={handleSavePlan} 
+                        disabled={saving}
+                        className="btn-secondary py-2 px-4 text-xs flex items-center gap-2 border-brand-primary/30"
+                      >
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Save Plan
+                      </button>
+                      <button onClick={addGuest} className="btn-primary py-2 px-4 text-xs flex items-center gap-2">
+                        <Plus className="w-4 h-4" /> Add Guest
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="space-y-4">
@@ -548,27 +648,44 @@ export const PlanEvent = () => {
                         <div className="flex items-center justify-between pt-2 border-t border-white/5">
                           <div className="flex items-center gap-3">
                             <span className={cn(
-                              "text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-tighter", 
-                              guest.status === 'Invited' ? "bg-brand-secondary/20 text-brand-secondary" : "bg-white/10 text-white/40"
+                              "mono-tag", 
+                              guest.status === 'Invited' ? "text-brand-secondary border-brand-secondary/20 bg-brand-secondary/5" : ""
                             )}>
                               {guest.status}
                             </span>
                             {guest.invitedAt && (
-                              <span className="text-[10px] text-white/30 italic">
+                              <span className="font-mono text-[8px] text-white/20 uppercase tracking-widest">
                                 Sent {new Date(guest.invitedAt).toLocaleDateString()}
                               </span>
                             )}
                           </div>
                           
                           <div className="flex gap-2">
-                            <button 
-                              onClick={() => handleSendInvite(guest)} 
-                              disabled={sendingInvite === guest.id} 
-                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase hover:bg-brand-primary hover:text-white transition-all"
-                            >
-                              {sendingInvite === guest.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} 
-                              Send Invite
-                            </button>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => handleSendInvite(guest)} 
+                                  disabled={sendingInvite === guest.id} 
+                                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase hover:bg-brand-primary hover:text-white transition-all"
+                                >
+                                  {sendingInvite === guest.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} 
+                                  Send Invite
+                                </button>
+                                <button 
+                                  onClick={() => handleCopyInviteLink(guest)} 
+                                  className={cn(
+                                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all",
+                                    copiedId === guest.id ? "bg-green-500/20 text-green-500" : "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white"
+                                  )}
+                                >
+                                  {copiedId === guest.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} 
+                                  {copiedId === guest.id ? "Copied!" : "Copy Link"}
+                                </button>
+                              </div>
+                              <p className="text-[8px] text-white/20 text-center max-w-[200px]">
+                                * Sandbox: Only verified emails can receive. Use "Copy Link" for others.
+                              </p>
+                            </div>
                             <button 
                               onClick={() => removeGuest(guest.id)} 
                               className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
@@ -582,6 +699,85 @@ export const PlanEvent = () => {
                     {guests.length === 0 && (
                       <div className="text-center py-10 text-white/40">
                         No guests added yet. Click "Add Guest" to start!
+                      </div>
+                    )}
+                  </div>
+                </GlassCard>
+              </motion.div>
+            )}
+            {activeTab === 'scavenger' && (
+              <motion.div
+                key="scavenger"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-6"
+              >
+                <GlassCard className="p-6">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <h3 className="text-2xl font-bold flex items-center gap-3">
+                        <Bot className="w-6 h-6 text-brand-primary" /> AI Scavenger Hunt
+                      </h3>
+                      <p className="text-white/40 text-sm mt-1">Gamify your event with AI-generated missions!</p>
+                    </div>
+                    <button 
+                      onClick={handleGenerateScavengerHunt}
+                      disabled={generatingHunt}
+                      className="btn-primary py-2 px-6 text-xs flex items-center gap-2"
+                    >
+                      {generatingHunt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      {scavengerHunt.length > 0 ? "Regenerate" : "Generate Hunt"}
+                    </button>
+                  </div>
+
+                  <div className="grid gap-4">
+                    {scavengerHunt.map((mission) => (
+                      <button
+                        key={mission.id}
+                        onClick={() => toggleMission(mission.id)}
+                        className={cn(
+                          "w-full flex items-center gap-6 p-6 rounded-[2rem] border transition-all text-left group",
+                          mission.completed ? "bg-brand-primary/10 border-brand-primary/30 opacity-60" : "bg-white/5 border-white/10 hover:border-white/20"
+                        )}
+                      >
+                        <div className={cn(
+                          "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-all",
+                          mission.completed ? "bg-brand-primary text-white" : "bg-white/5 text-white/20 group-hover:bg-white/10"
+                        )}>
+                          {mission.completed ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className={cn("text-lg font-bold", mission.completed && "line-through text-white/40")}>{mission.mission}</h4>
+                            <span className="mono-tag text-[10px]">{mission.points} PTS</span>
+                          </div>
+                          <p className="text-sm text-white/40 leading-relaxed">{mission.description}</p>
+                        </div>
+                      </button>
+                    ))}
+
+                    {scavengerHunt.length === 0 && !generatingHunt && (
+                      <div className="text-center py-20 bento-card border-dashed border-white/10">
+                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-6">
+                          <Bot className="w-8 h-8 text-white/20" />
+                        </div>
+                        <h4 className="text-xl font-bold mb-2">No Hunt Generated</h4>
+                        <p className="text-white/40 max-w-xs mx-auto mb-8">Let our AI create a custom scavenger hunt based on your event theme and location.</p>
+                        <button 
+                          onClick={handleGenerateScavengerHunt}
+                          className="btn-primary py-3 px-8"
+                        >
+                          Generate Now
+                        </button>
+                      </div>
+                    )}
+
+                    {generatingHunt && (
+                      <div className="text-center py-20">
+                        <Loader2 className="w-12 h-12 text-brand-primary animate-spin mx-auto mb-6" />
+                        <h4 className="text-xl font-bold mb-2">Creating your adventure...</h4>
+                        <p className="text-white/40">Our AI is brainstorming fun missions for your guests.</p>
                       </div>
                     )}
                   </div>

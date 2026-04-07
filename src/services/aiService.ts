@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 // Helper to get the API key
 const getApiKey = () => {
@@ -6,103 +6,152 @@ const getApiKey = () => {
               (import.meta.env?.VITE_GEMINI_API_KEY as string) || 
               "";
   
-  // Debug logging
-  if (!key) {
-    console.error("❌ AI Service: No API Key found in the browser.");
-  } else {
-    console.log(`✅ AI Service: API Key detected! Starts with: ${key.substring(0, 4)}...`);
-  }
-  
   return key;
 };
 
+// Helper to handle AI calls with retry logic and better error messages
+async function callAiWithRetry(fn: (useLite?: boolean) => Promise<any>, retries = 6, delay = 3000, useLite = true): Promise<any> {
+  try {
+    return await fn(useLite);
+  } catch (error: any) {
+    const isRateLimit = error.message?.includes("429") || error.status === "RESOURCE_EXHAUSTED";
+    
+    if (isRateLimit && retries > 0) {
+      console.warn(`⚠️ AI Service: Shared key busy. Retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callAiWithRetry(fn, retries - 1, delay * 1.5, useLite);
+    }
+    
+    // If Lite failed after all retries, try one last time with standard Flash (different quota pool)
+    if (isRateLimit && useLite) {
+      console.warn("⚠️ AI Service: Lite model quota exhausted. Falling back to standard Flash...");
+      return callAiWithRetry(fn, 2, 1000, false);
+    }
+    
+    if (isRateLimit) {
+      throw new Error("AI Quota Exceeded: The shared system is currently at maximum capacity. Please try again in a few minutes. ⏳");
+    }
+    
+    throw error;
+  }
+}
+
 export const aiService = {
   async getVenueRecommendations(budget: number, location: string, theme: string, guestCount: number) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("AI API Key missing.");
-    
-    const ai = new GoogleGenAI({ apiKey });
-    
-    try {
+    return callAiWithRetry(async (useLite) => {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        throw new Error("AI API Key is missing. \n\nTo fix this on localhost:\n1. Create a file named '.env' in the root folder.\n2. Add 'VITE_GEMINI_API_KEY=your_key_here' to it.\n3. Restart your dev server.");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
         contents: `Suggest 3 unique venue types for a ${theme} event in ${location} with a budget of ₹${budget} for ${guestCount} guests. Provide name, estimated cost in ₹, and why it fits the theme. Return in JSON format.`,
         config: {
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
         }
       });
       return JSON.parse(response.text || "[]");
-    } catch (error) {
-      console.error("AI Venue Recommendation Error:", error);
-      throw error;
-    }
+    });
   },
 
   async generateInvitation(eventDetails: any) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("AI API Key missing.");
-
-    const ai = new GoogleGenAI({ apiKey });
-
-    try {
+    return callAiWithRetry(async (useLite) => {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        throw new Error("AI API Key is missing. \n\nTo fix this on localhost:\n1. Create a file named '.env' in the root folder.\n2. Add 'VITE_GEMINI_API_KEY=your_key_here' to it.\n3. Restart your dev server.");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
         contents: `Generate a creative and modern invitation text for the following event: ${JSON.stringify(eventDetails)}. Use a Gen-Z aesthetic with emojis and a catchy headline.`,
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        }
       });
       return response.text;
-    } catch (error) {
-      console.error("AI Invitation Generation Error:", error);
-      throw error;
-    }
+    });
   },
 
   async chatAssistant(message: string, history: any[]) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("AI API Key missing.");
-
-    const ai = new GoogleGenAI({ apiKey });
-
-    try {
+    return callAiWithRetry(async (useLite) => {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        throw new Error("AI API Key is missing. \n\nTo fix this on localhost:\n1. Create a file named '.env' in the root folder.\n2. Add 'VITE_GEMINI_API_KEY=your_key_here' to it.\n3. Restart your dev server.");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const chat = ai.chats.create({
-        model: "gemini-3-flash-preview",
+        model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
         config: {
           systemInstruction: "You are Plan-It AI, a helpful and trendy event planning assistant. You help users find venues, plan budgets, and generate creative ideas for their events. Use a friendly, modern tone with emojis.",
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
         },
       });
       
       const response = await chat.sendMessage({ message });
       return response.text;
-    } catch (error) {
-      console.error("AI Chat Assistant Error:", error);
-      throw error;
-    }
+    });
   },
 
   async getStructuredPlan(eventDetails: any) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("AI API Key missing.");
-
-    const ai = new GoogleGenAI({ apiKey });
-
-    try {
+    return callAiWithRetry(async (useLite) => {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        throw new Error("AI API Key is missing. \n\nTo fix this on localhost:\n1. Create a file named '.env' in the root folder.\n2. Add 'VITE_GEMINI_API_KEY=your_key_here' to it.\n3. Restart your dev server.");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Based on these event details: ${JSON.stringify(eventDetails)}, generate a detailed event plan in JSON format. 
+        model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
+        contents: `Based on these event details: ${JSON.stringify(eventDetails)}, generate a professional, industry-standard event plan in JSON format. 
+        
+        CRITICAL CONSTRAINT: The total budget provided is exactly ₹${eventDetails.budget}. 
+        The sum of all "estimatedCost" values in the "budgetBreakdown" MUST be exactly ₹${eventDetails.budget}. 
+        Do NOT hallucinate a larger budget. Even if the budget seems low for the event type, distribute the ₹${eventDetails.budget} proportionally across categories.
+        
         All costs must be in Indian Rupees (₹).
         Include:
         1. "themes": An array of 3 unique theme names and descriptions.
         2. "budgetBreakdown": An array of objects with "category", "estimatedCost" (NUMBER ONLY, no strings), and "priority" (High/Medium/Low).
-        3. "checklist": An array of objects with "task" and "timeline" (e.g., "6 months before").
+        3. "checklist": An array of objects with "task" and "timeline" (e.g., "6 months before", "1 month before", "1 week before", "Day of event").
         
         Return ONLY the JSON object.`,
         config: {
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
         }
       });
       return JSON.parse(response.text || "{}");
-    } catch (error) {
-      console.error("AI Structured Plan Error:", error);
-      throw error;
-    }
+    });
+  },
+
+  async generateScavengerHunt(eventDetails: any) {
+    return callAiWithRetry(async (useLite) => {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        throw new Error("AI API Key is missing.");
+      }
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
+        contents: `Create a fun and interactive scavenger hunt for a ${eventDetails.type} event with the theme "${eventDetails.theme || 'General'}". 
+        The location is ${eventDetails.location}.
+        
+        Generate 8-10 creative "missions" or "items to find" that guests can do during the event. 
+        Missions should be a mix of:
+        - Social (e.g., "Find someone who...")
+        - Visual (e.g., "Take a photo of...")
+        - Hidden (e.g., "Find the secret...")
+        
+        Return the result in JSON format as an array of objects with "id", "mission", "description", and "points".
+        
+        Return ONLY the JSON array.`,
+        config: {
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        }
+      });
+      return JSON.parse(response.text || "[]");
+    });
   }
 };
