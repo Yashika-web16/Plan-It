@@ -5,72 +5,42 @@ import { GlassCard } from "./GlassCard";
 
 export const Hero = () => {
   return (
-    <section className="relative pt-32 pb-20 px-6 overflow-hidden">
-      <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+    <section className="relative pt-40 pb-32 px-6 overflow-hidden">
+      <div className="max-w-7xl mx-auto text-center relative z-10">
         <motion.div
-          initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
         >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass text-sm font-medium mb-6">
-            <Sparkles className="w-4 h-4 text-brand-accent" />
-            <span className="text-brand-accent">AI-Powered Event Planning</span>
+          <div className="inline-flex items-center gap-2 px-6 py-2 rounded-full glass text-[10px] font-bold uppercase tracking-widest mb-10 border-white/10">
+            <Sparkles className="w-3 h-3 text-brand-primary" />
+            <span className="text-white/60">AI-Powered Event Planning</span>
           </div>
           
-          <h1 className="text-6xl md:text-8xl font-bold font-display leading-tight mb-6">
+          <h1 className="text-7xl md:text-9xl font-bold font-display leading-[0.9] mb-10 tracking-tighter">
             Plan Your <br />
             <span className="text-gradient">Dream Event</span> <br />
             Effortlessly.
           </h1>
           
-          <p className="text-xl text-white/60 mb-10 max-w-lg leading-relaxed">
-            Find real-world vendors with our intelligent search. From concept to reality, we've got you covered.
+          <p className="text-lg md:text-xl text-white/40 mb-12 max-w-2xl mx-auto leading-relaxed">
+            The all-in-one AI platform for modern event planning. Find vendors, manage budgets, and design experiences in seconds.
           </p>
           
-          <div className="flex flex-wrap gap-4">
-            <Link to="/discover" className="btn-primary flex items-center gap-2 text-lg">
+          <div className="flex flex-wrap justify-center gap-6">
+            <Link to="/discover" className="btn-primary flex items-center gap-3">
               Explore Events <ArrowRight className="w-5 h-5" />
             </Link>
-            <Link to="/vendors" className="btn-secondary flex items-center gap-2 text-lg">
+            <Link to="/vendors" className="btn-secondary flex items-center gap-3">
               Find Vendors <MapPin className="w-5 h-5" />
             </Link>
           </div>
         </motion.div>
-        
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 1, ease: "easeOut" }}
-          className="relative"
-        >
-          <div className="relative z-10 grid grid-cols-2 gap-4">
-            <GlassCard className="aspect-square flex flex-col justify-center items-center text-center p-4">
-              <Users className="w-12 h-12 text-brand-primary mb-4" />
-              <h3 className="text-2xl font-bold font-display">10k+</h3>
-              <p className="text-sm text-white/50">Happy Users</p>
-            </GlassCard>
-            <GlassCard className="aspect-square flex flex-col justify-center items-center text-center p-4 mt-8">
-              <MapPin className="w-12 h-12 text-brand-secondary mb-4" />
-              <h3 className="text-2xl font-bold font-display">500+</h3>
-              <p className="text-sm text-white/50">Premium Venues</p>
-            </GlassCard>
-            <GlassCard className="aspect-square flex flex-col justify-center items-center text-center p-4 -mt-8">
-              <Calendar className="w-12 h-12 text-brand-accent mb-4" />
-              <h3 className="text-2xl font-bold font-display">2k+</h3>
-              <p className="text-sm text-white/50">Events Hosted</p>
-            </GlassCard>
-            <GlassCard className="aspect-square flex flex-col justify-center items-center text-center p-4">
-              <Sparkles className="w-12 h-12 text-white mb-4" />
-              <h3 className="text-2xl font-bold font-display">AI</h3>
-              <p className="text-sm text-white/50">Smart Assistant</p>
-            </GlassCard>
-          </div>
-          
-          {/* Decorative elements */}
-          <div className="absolute -top-20 -right-20 w-64 h-64 bg-brand-primary/20 rounded-full blur-3xl" />
-          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-brand-secondary/20 rounded-full blur-3xl" />
-        </motion.div>
       </div>
+
+      {/* Background Glows */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[var(--glow-1)] rounded-full blur-[120px] pointer-events-none transition-colors duration-500" />
+      <div className="absolute top-1/4 right-1/4 w-[400px] h-[400px] bg-[var(--glow-2)] rounded-full blur-[100px] pointer-events-none transition-colors duration-500" />
     </section>
   );
 };
