@@ -1,20 +1,24 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Send, Bot, User, Loader2, Calendar, MapPin, DollarSign, Users, Save, CheckCircle2, Circle, Plus, Trash2, ChevronRight, ListTodo, Wallet, Users2, Mail, Copy, Check } from "lucide-react";
+import { Sparkles, Send, Bot, User, Loader2, Calendar, MapPin, DollarSign, Users, Save, CheckCircle2, Circle, Plus, Trash2, ChevronRight, ListTodo, Wallet, Users2, Mail, Copy, Check, Trophy } from "lucide-react";
 import { GlassCard, cn } from "../components/GlassCard";
 import { aiService } from "../services/aiService";
 import { useAuth } from "../AuthContext";
 import { db, handleFirestoreError, OperationType } from "../firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, query, where, orderBy, onSnapshot, getDoc } from "firebase/firestore";
 import { useLocation } from "../LocationContext";
-import { BudgetItem, PlanItem, Guest, ScavengerMission } from "../types";
+import { BudgetItem, PlanItem, Guest, ScavengerMission, ScavengerSubmission, CateringPlateDetail } from "../types";
+import { useParams, useNavigate } from "react-router-dom";
 
 import { InvitationGenerator } from "../components/InvitationGenerator";
+import { ScavengerHuntSection } from "../components/ScavengerHuntSection";
 
 export const PlanEvent = () => {
   const { user } = useAuth();
+  const { bookingId: paramBookingId } = useParams();
+  const navigate = useNavigate();
   const { selectedLocation } = useLocation();
-  const [activeTab, setActiveTab] = useState<'details' | 'budget' | 'checklist' | 'guests' | 'scavenger'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'budget' | 'checklist' | 'guests' | 'scavenger' | 'submissions'>('details');
   const [messages, setMessages] = useState<{ role: 'user' | 'bot', text: string }[]>([
     { role: 'bot', text: "Hey! I'm your Plan-It assistant. What kind of event are we dreaming up today? ✨" }
   ]);
@@ -24,8 +28,10 @@ export const PlanEvent = () => {
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [sendingInvite, setSendingInvite] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [savedBookingId, setSavedBookingId] = useState<string | null>(null);
+  const [savedBookingId, setSavedBookingId] = useState<string | null>(paramBookingId || null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [allSubmissions, setAllSubmissions] = useState<ScavengerSubmission[]>([]);
+  const [isInitialLoad, setIsInitialLoad] = useState(!!paramBookingId);
 
   const [formData, setFormData] = useState({
     type: 'wedding',
@@ -43,10 +49,102 @@ export const PlanEvent = () => {
   const [generatingHunt, setGeneratingHunt] = useState(false);
 
   useEffect(() => {
-    if (selectedLocation) {
+    if (selectedLocation && !paramBookingId) {
       setFormData(prev => ({ ...prev, location: selectedLocation }));
     }
-  }, [selectedLocation]);
+  }, [selectedLocation, paramBookingId]);
+
+  // Load existing booking
+  useEffect(() => {
+    if (!paramBookingId) return;
+
+    const fetchBooking = async () => {
+      try {
+        const docRef = doc(db, "bookings", paramBookingId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          
+          // Ownership check: Only the organizer can edit
+          if (user && data.userId !== user.uid) {
+            alert("You don't have permission to edit this plan. Only the organizer can make changes.");
+            navigate('/dashboard');
+            return;
+          }
+
+          setFormData({
+            type: data.details.type,
+            date: data.date.split('T')[0],
+            budget: data.details.budget,
+            guestCount: data.details.guestCount,
+            location: data.details.location
+          });
+          setThemes(data.details.themes || []);
+          setBudgetBreakdown(data.details.budgetBreakdown || []);
+          setChecklist(data.details.checklist || []);
+          setGuests(data.details.guests || []);
+          setScavengerHunt(data.details.scavengerHunt || []);
+          setMessages([{ role: 'bot', text: `Welcome back! I've loaded your ${data.details.type} plan. What would you like to adjust? 🛠️` }]);
+        }
+      } catch (error) {
+        console.error("Error loading booking:", error);
+      } finally {
+        setIsInitialLoad(false);
+      }
+    };
+
+    fetchBooking();
+  }, [paramBookingId]);
+
+  // Listen for real-time updates (especially for guests)
+  useEffect(() => {
+    if (!savedBookingId) return;
+
+    const unsubscribe = onSnapshot(doc(db, "bookings", savedBookingId), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setGuests(data.details.guests || []);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [savedBookingId]);
+
+  useEffect(() => {
+    if (!savedBookingId) return;
+    
+    const q = query(
+      collection(db, 'scavenger_submissions'),
+      where('eventId', '==', savedBookingId),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setAllSubmissions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScavengerSubmission)));
+    });
+
+    return () => unsubscribe();
+  }, [savedBookingId]);
+
+  const handleApproveSubmission = async (submissionId: string) => {
+    try {
+      await updateDoc(doc(db, 'scavenger_submissions', submissionId), {
+        status: 'approved'
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'scavenger_submissions');
+    }
+  };
+
+  const handleRejectSubmission = async (submissionId: string) => {
+    try {
+      await updateDoc(doc(db, 'scavenger_submissions', submissionId), {
+        status: 'rejected'
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'scavenger_submissions');
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
@@ -175,20 +273,20 @@ export const PlanEvent = () => {
     }
   };
 
-  const handleSavePlan = async () => {
+  const savePlanCore = async (silent = false) => {
     if (!user) {
-      alert("Please login to save your plan!");
-      return;
+      if (!silent) alert("Please login to save your plan!");
+      return null;
     }
     
     if (!validateForm()) {
-      alert("Please fix the errors in the form before saving!");
-      return;
+      if (!silent) alert("Please fix the errors in the form before saving!");
+      return null;
     }
 
     setSaving(true);
     try {
-      const docRef = await addDoc(collection(db, "bookings"), {
+      const bookingData = {
         userId: user.uid,
         type: 'plan',
         status: 'pending',
@@ -202,21 +300,91 @@ export const PlanEvent = () => {
           guests,
           scavengerHunt
         },
-        createdAt: new Date().toISOString()
-      });
-      setSavedBookingId(docRef.id);
-      alert("Plan saved to your dashboard! 🚀");
+        updatedAt: new Date().toISOString()
+      };
+
+      if (savedBookingId) {
+        await updateDoc(doc(db, "bookings", savedBookingId), bookingData);
+        if (!silent) alert("Plan updated successfully! 🚀");
+        return savedBookingId;
+      } else {
+        const docRef = await addDoc(collection(db, "bookings"), {
+          ...bookingData,
+          participantIds: [user.uid],
+          createdAt: new Date().toISOString()
+        });
+        setSavedBookingId(docRef.id);
+        if (!silent) alert("Plan saved to your dashboard! 🚀");
+        return docRef.id;
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, "bookings");
+      return null;
     } finally {
       setSaving(false);
     }
   };
 
+  const handleSavePlan = () => savePlanCore(false);
+
+  const removeBudgetItem = (index: number) => {
+    setBudgetBreakdown(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addBudgetItem = () => {
+    setBudgetBreakdown(prev => [...prev, { category: "New Item", estimatedCost: 0, priority: 'Medium' }]);
+  };
+
+  const updateBudgetItem = (index: number, updates: Partial<BudgetItem>) => {
+    setBudgetBreakdown(prev => prev.map((item, i) => i === index ? { ...item, ...updates } : item));
+  };
+
+  const addCateringDetail = (itemIndex: number) => {
+    setBudgetBreakdown(prev => {
+      const newBreakdown = [...prev];
+      const item = { ...newBreakdown[itemIndex] };
+      if (!item.cateringDetails) item.cateringDetails = [];
+      item.cateringDetails = [...item.cateringDetails, { type: 'Veg', count: 0, costPerPlate: 0 }];
+      newBreakdown[itemIndex] = item;
+      return newBreakdown;
+    });
+  };
+
+  const updateCateringDetail = (itemIndex: number, detailIndex: number, updates: Partial<CateringPlateDetail>) => {
+    setBudgetBreakdown(prev => {
+      const newBreakdown = [...prev];
+      const item = { ...newBreakdown[itemIndex] };
+      if (!item.cateringDetails) return prev;
+      const newDetails = [...item.cateringDetails];
+      newDetails[detailIndex] = { ...newDetails[detailIndex], ...updates };
+      item.cateringDetails = newDetails;
+      
+      // Recalculate total for this item if it's catering
+      item.estimatedCost = newDetails.reduce((acc, d) => acc + (Number(d.count) * Number(d.costPerPlate)), 0);
+      
+      newBreakdown[itemIndex] = item;
+      return newBreakdown;
+    });
+  };
+
+  const removeCateringDetail = (itemIndex: number, detailIndex: number) => {
+    setBudgetBreakdown(prev => {
+      const newBreakdown = [...prev];
+      const item = { ...newBreakdown[itemIndex] };
+      if (!item.cateringDetails) return prev;
+      item.cateringDetails = item.cateringDetails.filter((_, i) => i !== detailIndex);
+      item.estimatedCost = item.cateringDetails.reduce((acc, d) => acc + (Number(d.count) * Number(d.costPerPlate)), 0);
+      newBreakdown[itemIndex] = item;
+      return newBreakdown;
+    });
+  };
+
   const toggleChecklistItem = (index: number) => {
-    const newList = [...checklist];
-    newList[index].completed = !newList[index].completed;
-    setChecklist(newList);
+    setChecklist(prev => {
+      const newList = [...prev];
+      newList[index] = { ...newList[index], completed: !newList[index].completed };
+      return newList;
+    });
   };
 
   const addGuest = () => {
@@ -226,19 +394,19 @@ export const PlanEvent = () => {
       email: "",
       status: "Pending"
     };
-    setGuests([...guests, newGuest]);
+    setGuests(prev => [...prev, newGuest]);
   };
 
   const updateGuest = (id: string, updates: Partial<Guest>) => {
-    setGuests(guests.map(g => g.id === id ? { ...g, ...updates } : g));
+    setGuests(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
   };
 
   const removeGuest = (id: string) => {
-    setGuests(guests.filter(g => g.id !== id));
+    setGuests(prev => prev.filter(g => g.id !== id));
   };
 
   const toggleMission = (id: string) => {
-    setScavengerHunt(scavengerHunt.map(m => m.id === id ? { ...m, completed: !m.completed } : m));
+    setScavengerHunt(prev => prev.map(m => m.id === id ? { ...m, completed: !m.completed } : m));
   };
 
   const handleSendInvite = async (guest: Guest) => {
@@ -247,10 +415,9 @@ export const PlanEvent = () => {
       return;
     }
 
-    if (!savedBookingId) {
-      alert("Please save your plan first to generate an RSVP link! 💾");
-      return;
-    }
+    // Auto-save before sending to ensure the guest ID exists in the DB
+    const currentId = await savePlanCore(true);
+    if (!currentId) return;
 
     setSendingInvite(guest.id);
     try {
@@ -260,7 +427,7 @@ export const PlanEvent = () => {
       });
 
       const subject = `You're Invited: ${formData.type.toUpperCase()}! ✨`;
-      const rsvpLink = `${window.location.origin}/rsvp/${savedBookingId}?guestId=${guest.id}&name=${encodeURIComponent(guest.name)}`;
+      const rsvpLink = `${window.location.origin}/rsvp/${currentId}?guestId=${guest.id}&name=${encodeURIComponent(guest.name)}`;
       
       // Call server-side API for real email sending
       const response = await fetch('/api/send-invite', {
@@ -293,31 +460,35 @@ export const PlanEvent = () => {
     }
   };
 
-  const handleCopyInviteLink = (guest: Guest) => {
-    if (!savedBookingId) {
-      alert("Please save your plan first to generate an RSVP link! 💾");
-      return;
-    }
+  const handleCopyInviteLink = async (guest: Guest) => {
+    // Auto-save before copying to ensure the guest ID exists in the DB
+    const currentId = await savePlanCore(true);
+    if (!currentId) return;
 
-    const rsvpLink = `${window.location.origin}/rsvp/${savedBookingId}?guestId=${guest.id}&name=${encodeURIComponent(guest.name)}`;
+    const rsvpLink = `${window.location.origin}/rsvp/${currentId}?guestId=${guest.id}&name=${encodeURIComponent(guest.name)}`;
     
     // Fallback for clipboard copying
     try {
-      navigator.clipboard.writeText(rsvpLink).then(() => {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(rsvpLink);
         setCopiedId(guest.id);
         setTimeout(() => setCopiedId(null), 2000);
-      }).catch(err => {
-        console.error('Failed to copy: ', err);
+      } else {
         // Manual fallback
         const textArea = document.createElement("textarea");
         textArea.value = rsvpLink;
         document.body.appendChild(textArea);
+        textArea.focus();
         textArea.select();
-        document.execCommand('copy');
+        try {
+          document.execCommand('copy');
+          setCopiedId(guest.id);
+          setTimeout(() => setCopiedId(null), 2000);
+        } catch (err) {
+          console.error('Fallback copy failed', err);
+        }
         document.body.removeChild(textArea);
-        setCopiedId(guest.id);
-        setTimeout(() => setCopiedId(null), 2000);
-      });
+      }
     } catch (err) {
       console.error('Clipboard API error: ', err);
     }
@@ -340,18 +511,24 @@ export const PlanEvent = () => {
               { id: 'budget', icon: Wallet, label: 'Budget' },
               { id: 'checklist', icon: ListTodo, label: 'Checklist' },
               { id: 'guests', icon: Users2, label: 'Guests' },
-              { id: 'scavenger', icon: Bot, label: 'Scavenger Hunt' }
+              { id: 'scavenger', icon: Bot, label: 'Scavenger Hunt' },
+              { id: 'submissions', icon: CheckCircle2, label: 'Submissions' }
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={cn(
-                  "flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all",
+                  "flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all relative",
                   activeTab === tab.id ? "bg-white text-black shadow-lg" : "hover:bg-white/5 text-white/40"
                 )}
               >
                 <tab.icon className="w-4 h-4" />
                 {tab.label}
+                {tab.id === 'submissions' && allSubmissions.filter(s => s.status === 'pending').length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-primary text-white text-[8px] flex items-center justify-center rounded-full animate-pulse">
+                    {allSubmissions.filter(s => s.status === 'pending').length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -509,36 +686,136 @@ export const PlanEvent = () => {
                     <h3 className="text-xl font-bold flex items-center gap-2">
                       <Wallet className="w-5 h-5 text-brand-accent" /> Budget Breakdown
                     </h3>
-                    <div className="text-right">
-                      <p className="text-xs text-white/50 uppercase tracking-wider">Total Estimated</p>
-                      <p className="text-2xl font-bold text-brand-secondary">
-                        ₹{budgetBreakdown.reduce((acc, item) => acc + (Number(item.estimatedCost) || 0), 0).toLocaleString()}
-                      </p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-xs text-white/50 uppercase tracking-wider">Total Estimated</p>
+                        <p className="text-2xl font-bold text-brand-secondary">
+                          ₹{budgetBreakdown.reduce((acc, item) => acc + (Number(item.estimatedCost) || 0), 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={addBudgetItem} 
+                        className="btn-primary py-2 px-4 text-xs flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" /> Add Item
+                      </button>
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {budgetBreakdown.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
-                        <div>
-                          <p className="font-medium">{item.category}</p>
-                          <span className={cn(
-                            "mono-tag mt-2 inline-block",
-                            item.priority === 'High' ? "text-red-400 border-red-400/20 bg-red-400/5" :
-                            item.priority === 'Medium' ? "text-yellow-400 border-yellow-400/20 bg-yellow-400/5" :
-                            "text-green-400 border-green-400/20 bg-green-400/5"
-                          )}>
-                            {item.priority} Priority
-                          </span>
+                      <div key={i} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <input 
+                              type="text"
+                              value={item.category}
+                              onChange={(e) => updateBudgetItem(i, { category: e.target.value })}
+                              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                              placeholder="Category Name"
+                            />
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">₹</span>
+                              <input 
+                                type="number"
+                                value={item.estimatedCost}
+                                onChange={(e) => updateBudgetItem(i, { estimatedCost: Number(e.target.value) })}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg pl-7 pr-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                                placeholder="Cost"
+                                disabled={!!item.cateringDetails && item.cateringDetails.length > 0}
+                              />
+                            </div>
+                            <select 
+                              value={item.priority}
+                              onChange={(e) => updateBudgetItem(i, { priority: e.target.value as any })}
+                              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                            >
+                              <option value="High">High Priority</option>
+                              <option value="Medium">Medium Priority</option>
+                              <option value="Low">Low Priority</option>
+                            </select>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => removeBudgetItem(i)}
+                            className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-brand-accent">₹{Number(item.estimatedCost).toLocaleString()}</p>
-                        </div>
+
+                        {/* Detailed Catering Breakdown */}
+                        {(item.category.toLowerCase().includes('catering') || item.category.toLowerCase().includes('food')) && (
+                          <div className="pl-4 border-l-2 border-brand-primary/20 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-[10px] uppercase font-bold tracking-widest text-brand-primary">Per Plate Breakdown</h4>
+                              <button 
+                                type="button"
+                                onClick={() => addCateringDetail(i)}
+                                className="text-[10px] text-white/40 hover:text-white flex items-center gap-1 uppercase tracking-widest"
+                              >
+                                <Plus className="w-3 h-3" /> Add Plate Type
+                              </button>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              {item.cateringDetails?.map((detail, di) => (
+                                <div key={di} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                                  <select 
+                                    value={detail.type}
+                                    onChange={(e) => updateCateringDetail(i, di, { type: e.target.value as any })}
+                                    className="bg-white/5 border border-white/5 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                                  >
+                                    <option value="Veg">Veg</option>
+                                    <option value="Non-Veg">Non-Veg</option>
+                                    <option value="Kids">Kids</option>
+                                    <option value="Adults">Adults</option>
+                                    <option value="Aged">Aged</option>
+                                  </select>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-white/20">Qty</span>
+                                    <input 
+                                      type="number"
+                                      value={detail.count}
+                                      onChange={(e) => updateCateringDetail(i, di, { count: Number(e.target.value) })}
+                                      className="w-full bg-white/5 border border-white/5 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                                      placeholder="Count"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-white/20">₹/Plate</span>
+                                    <input 
+                                      type="number"
+                                      value={detail.costPerPlate}
+                                      onChange={(e) => updateCateringDetail(i, di, { costPerPlate: Number(e.target.value) })}
+                                      className="w-full bg-white/5 border border-white/5 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                                      placeholder="Price"
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-brand-accent">₹{(detail.count * detail.costPerPlate).toLocaleString()}</span>
+                                    <button 
+                                      type="button"
+                                      onClick={() => removeCateringDetail(i, di)}
+                                      className="p-1 text-white/20 hover:text-red-500"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              {(!item.cateringDetails || item.cateringDetails.length === 0) && (
+                                <p className="text-[10px] text-white/20 italic">No detailed breakdown added yet.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                     {budgetBreakdown.length === 0 && (
                       <div className="text-center py-10 text-white/40">
-                        Use AI Recommendations to generate a budget breakdown!
+                        Use AI Recommendations to generate a budget breakdown or add items manually!
                       </div>
                     )}
                   </div>
@@ -649,7 +926,10 @@ export const PlanEvent = () => {
                           <div className="flex items-center gap-3">
                             <span className={cn(
                               "mono-tag", 
-                              guest.status === 'Invited' ? "text-brand-secondary border-brand-secondary/20 bg-brand-secondary/5" : ""
+                              guest.status === 'Invited' ? "text-brand-secondary border-brand-secondary/20 bg-brand-secondary/5" : 
+                              guest.status === 'Attending' ? "text-green-400 border-green-400/20 bg-green-400/5" :
+                              guest.status === 'Declined' ? "text-red-400 border-red-400/20 bg-red-400/5" :
+                              ""
                             )}>
                               {guest.status}
                             </span>
@@ -713,71 +993,101 @@ export const PlanEvent = () => {
                 exit={{ opacity: 0, y: -20 }}
                 className="space-y-6"
               >
-                <GlassCard className="p-6">
-                  <div className="flex items-center justify-between mb-8">
-                    <div>
-                      <h3 className="text-2xl font-bold flex items-center gap-3">
-                        <Bot className="w-6 h-6 text-brand-primary" /> AI Scavenger Hunt
-                      </h3>
-                      <p className="text-white/40 text-sm mt-1">Gamify your event with AI-generated missions!</p>
+                {scavengerHunt.length > 0 ? (
+                  <ScavengerHuntSection 
+                    eventId={savedBookingId || ''} 
+                    missions={scavengerHunt} 
+                    currentUser={user ? { uid: user.uid, displayName: user.name || 'Organizer', photoURL: user.photoURL || undefined } : undefined}
+                    isOrganizer={true}
+                  />
+                ) : (
+                  <GlassCard className="p-6 text-center py-20">
+                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-6">
+                      <Bot className="w-8 h-8 text-white/20" />
                     </div>
+                    <h4 className="text-xl font-bold mb-2">No Hunt Generated</h4>
+                    <p className="text-white/40 max-w-xs mx-auto mb-8">Let our AI create a custom scavenger hunt based on your event theme and location.</p>
                     <button 
                       onClick={handleGenerateScavengerHunt}
                       disabled={generatingHunt}
-                      className="btn-primary py-2 px-6 text-xs flex items-center gap-2"
+                      className="btn-primary py-3 px-8 flex items-center gap-2 mx-auto"
                     >
                       {generatingHunt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                      {scavengerHunt.length > 0 ? "Regenerate" : "Generate Hunt"}
+                      Generate Now
                     </button>
-                  </div>
+                  </GlassCard>
+                )}
+              </motion.div>
+            )}
 
-                  <div className="grid gap-4">
-                    {scavengerHunt.map((mission) => (
-                      <button
-                        key={mission.id}
-                        onClick={() => toggleMission(mission.id)}
-                        className={cn(
-                          "w-full flex items-center gap-6 p-6 rounded-[2rem] border transition-all text-left group",
-                          mission.completed ? "bg-brand-primary/10 border-brand-primary/30 opacity-60" : "bg-white/5 border-white/10 hover:border-white/20"
-                        )}
-                      >
-                        <div className={cn(
-                          "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-all",
-                          mission.completed ? "bg-brand-primary text-white" : "bg-white/5 text-white/20 group-hover:bg-white/10"
-                        )}>
-                          {mission.completed ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <h4 className={cn("text-lg font-bold", mission.completed && "line-through text-white/40")}>{mission.mission}</h4>
-                            <span className="mono-tag text-[10px]">{mission.points} PTS</span>
+            {activeTab === 'submissions' && (
+              <motion.div
+                key="submissions"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-6"
+              >
+                <GlassCard className="p-6">
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-brand-primary" /> Guest Submissions
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    {allSubmissions.map((sub) => (
+                      <div key={sub.id} className="p-6 rounded-[2rem] bg-white/5 border border-white/10 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+                              {sub.userPhoto ? <img src={sub.userPhoto} alt={sub.userName} className="w-full h-full object-cover" /> : <User className="w-5 h-5 text-white/20" />}
+                            </div>
+                            <div>
+                              <p className="font-bold">{sub.userName}</p>
+                              <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                                Mission: {scavengerHunt.find(m => m.id === sub.missionId)?.mission || 'Unknown Mission'}
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-sm text-white/40 leading-relaxed">{mission.description}</p>
+                          <span className={cn(
+                            "mono-tag",
+                            sub.status === 'approved' ? "text-green-400 border-green-400/20 bg-green-400/5" :
+                            sub.status === 'rejected' ? "text-red-400 border-red-400/20 bg-red-400/5" :
+                            "text-yellow-400 border-yellow-400/20 bg-yellow-400/5"
+                          )}>
+                            {sub.status}
+                          </span>
                         </div>
-                      </button>
-                    ))}
 
-                    {scavengerHunt.length === 0 && !generatingHunt && (
-                      <div className="text-center py-20 bento-card border-dashed border-white/10">
-                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-6">
-                          <Bot className="w-8 h-8 text-white/20" />
+                        <div className="p-4 rounded-2xl bg-black/20 border border-white/5">
+                          <p className="text-[10px] uppercase text-white/40 font-bold tracking-widest mb-2">Proof ({sub.proofType})</p>
+                          {sub.proofType === 'image' ? (
+                            <img src={sub.proofValue} alt="Proof" className="max-w-full h-auto rounded-xl border border-white/10" referrerPolicy="no-referrer" />
+                          ) : (
+                            <p className="text-sm text-white/70 italic">"{sub.proofValue}"</p>
+                          )}
                         </div>
-                        <h4 className="text-xl font-bold mb-2">No Hunt Generated</h4>
-                        <p className="text-white/40 max-w-xs mx-auto mb-8">Let our AI create a custom scavenger hunt based on your event theme and location.</p>
-                        <button 
-                          onClick={handleGenerateScavengerHunt}
-                          className="btn-primary py-3 px-8"
-                        >
-                          Generate Now
-                        </button>
+
+                        {sub.status === 'pending' && (
+                          <div className="flex gap-2 pt-2">
+                            <button 
+                              onClick={() => handleApproveSubmission(sub.id)}
+                              className="flex-1 py-2 rounded-xl bg-green-500/20 text-green-500 text-xs font-bold uppercase hover:bg-green-500 hover:text-white transition-all"
+                            >
+                              Approve & Award {sub.pointsAwarded} PTS
+                            </button>
+                            <button 
+                              onClick={() => handleRejectSubmission(sub.id)}
+                              className="flex-1 py-2 rounded-xl bg-red-500/20 text-red-500 text-xs font-bold uppercase hover:bg-red-500 hover:text-white transition-all"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-
-                    {generatingHunt && (
-                      <div className="text-center py-20">
-                        <Loader2 className="w-12 h-12 text-brand-primary animate-spin mx-auto mb-6" />
-                        <h4 className="text-xl font-bold mb-2">Creating your adventure...</h4>
-                        <p className="text-white/40">Our AI is brainstorming fun missions for your guests.</p>
+                    ))}
+                    {allSubmissions.length === 0 && (
+                      <div className="text-center py-20 text-white/20">
+                        No submissions yet. Invite guests to start the hunt! 🏹
                       </div>
                     )}
                   </div>

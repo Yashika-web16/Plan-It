@@ -1,9 +1,12 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Sparkles, Wallet, ListTodo, Users2, CheckCircle2, Circle, Mail } from "lucide-react";
+import { X, Sparkles, Wallet, ListTodo, Users2, CheckCircle2, Circle, Mail, Trophy } from "lucide-react";
 import { GlassCard, cn } from "./GlassCard";
 import { BudgetItem, PlanItem, Guest } from "../types";
+import { ScavengerHuntSection } from "./ScavengerHuntSection";
+import { useAuth } from "../AuthContext";
 
 interface PlanModalProps {
+  bookingId: string;
   plan: {
     type: string;
     date: string;
@@ -14,11 +17,18 @@ interface PlanModalProps {
     budgetBreakdown?: BudgetItem[];
     checklist?: PlanItem[];
     guests?: Guest[];
+    scavengerHunt?: any[];
   };
   onClose: () => void;
 }
 
-export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
+// PlanModal component for displaying detailed event plans
+export const PlanModal = ({ bookingId, plan, onClose }: PlanModalProps) => {
+  const { user } = useAuth();
+  const guestInfo = plan.guests?.find(g => g.email === user?.email);
+  const isParticipant = user?.uid === plan.guests?.find(g => g.email === user?.email)?.id || user?.uid === (plan as any).userId;
+  const hasOptedIn = guestInfo?.wantsScavenger || user?.uid === (plan as any).userId;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <motion.div
@@ -114,7 +124,18 @@ export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
                           {item.priority}
                         </span>
                       </div>
-                      <p className="font-bold text-brand-accent">₹{Number(item.estimatedCost).toLocaleString()}</p>
+                      <div className="text-right">
+                        <p className="font-bold text-brand-accent">₹{Number(item.estimatedCost).toLocaleString()}</p>
+                        {item.cateringDetails && item.cateringDetails.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {item.cateringDetails.map((detail, di) => (
+                              <p key={di} className="text-[8px] text-white/40">
+                                {detail.type}: {detail.count} x ₹{detail.costPerPlate}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -163,13 +184,54 @@ export const PlanModal = ({ plan, onClose }: PlanModalProps) => {
                       </div>
                       <span className={cn(
                         "text-[8px] px-2 py-1 rounded-full font-bold uppercase", 
-                        guest.status === 'Invited' ? "bg-brand-secondary/20 text-brand-secondary" : "bg-white/10 text-white/40"
+                        guest.status === 'Attending' ? "bg-green-500/20 text-green-500" :
+                        guest.status === 'Declined' ? "bg-red-500/20 text-red-500" :
+                        "bg-brand-secondary/20 text-brand-secondary"
                       )}>
                         {guest.status}
                       </span>
                     </div>
                   ))}
                 </div>
+              </section>
+            )}
+
+            {/* Scavenger Hunt */}
+            {plan.scavengerHunt && plan.scavengerHunt.length > 0 && (
+              <section className="pt-8 border-t border-white/10">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold font-display flex items-center gap-2">
+                    <Trophy className="w-6 h-6 text-brand-primary" /> Scavenger Hunt
+                  </h3>
+                  {guestInfo && (
+                    <span className="text-xs text-brand-primary font-bold uppercase tracking-widest">
+                      {hasOptedIn ? "Active Participant" : "Join the Hunt!"}
+                    </span>
+                  )}
+                </div>
+
+                {!hasOptedIn && guestInfo ? (
+                  <div className="p-8 rounded-[2rem] bg-brand-primary/5 border border-brand-primary/20 text-center">
+                    <Trophy className="w-12 h-12 text-brand-primary mx-auto mb-4" />
+                    <h4 className="text-xl font-bold mb-2">Join the Crazy Scavenger Hunt! 🏆</h4>
+                    <p className="text-sm text-white/50 mb-6 max-w-md mx-auto">
+                      Complete missions, earn points, and win exclusive rewards like event discounts!
+                    </p>
+                    <button 
+                      onClick={() => window.location.href = `/rsvp/${bookingId}?guestId=${guestInfo.id}&name=${encodeURIComponent(guestInfo.name)}`}
+                      className="btn-primary px-8"
+                    >
+                      Count Me In!
+                    </button>
+                  </div>
+                ) : (
+                  <ScavengerHuntSection 
+                    eventId={bookingId}
+                    missions={plan.scavengerHunt}
+                    currentUser={user ? { uid: user.uid, displayName: user.name, photoURL: user.photoURL } : undefined}
+                    isOrganizer={user?.uid === (plan as any).userId}
+                  />
+                )}
               </section>
             )}
           </div>
