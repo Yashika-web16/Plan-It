@@ -46,7 +46,9 @@ export const PlanEvent = () => {
   const [checklist, setChecklist] = useState<PlanItem[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [scavengerHunt, setScavengerHunt] = useState<ScavengerMission[]>([]);
+  const [hotelRecommendations, setHotelRecommendations] = useState<any[]>([]);
   const [generatingHunt, setGeneratingHunt] = useState(false);
+  const [loadingHotels, setLoadingHotels] = useState(false);
 
   useEffect(() => {
     if (selectedLocation && !paramBookingId) {
@@ -84,6 +86,7 @@ export const PlanEvent = () => {
           setChecklist(data.details.checklist || []);
           setGuests(data.details.guests || []);
           setScavengerHunt(data.details.scavengerHunt || []);
+          setHotelRecommendations(data.details.hotelRecommendations || []);
           setMessages([{ role: 'bot', text: `Welcome back! I've loaded your ${data.details.type} plan. What would you like to adjust? 🛠️` }]);
         }
       } catch (error) {
@@ -207,9 +210,15 @@ export const PlanEvent = () => {
       return;
     }
     setAiAnalyzing(true);
+    setLoadingHotels(true);
     try {
-      const plan = await aiService.getStructuredPlan(formData);
+      const [plan, hotels] = await Promise.all([
+        aiService.getStructuredPlan(formData),
+        aiService.getHotelRecommendations(formData.location, Number(formData.guestCount), formData.type)
+      ]);
+
       if (plan.themes) setThemes(plan.themes);
+      setHotelRecommendations(hotels);
       
       if (plan.budgetBreakdown) {
         const targetBudget = Number(formData.budget);
@@ -251,6 +260,7 @@ export const PlanEvent = () => {
       setMessages(prev => [...prev, { role: 'bot', text: errorMsg }]);
     } finally {
       setAiAnalyzing(false);
+      setLoadingHotels(false);
     }
   };
 
@@ -298,7 +308,8 @@ export const PlanEvent = () => {
           budgetBreakdown,
           checklist,
           guests,
-          scavengerHunt
+          scavengerHunt,
+          hotelRecommendations
         },
         updatedAt: new Date().toISOString()
       };
@@ -666,6 +677,89 @@ export const PlanEvent = () => {
                         <p className="text-xs text-white/60">{theme.description}</p>
                       </GlassCard>
                     ))}
+                  </div>
+                )}
+
+                {/* Hotel Recommendations Section */}
+                {(loadingHotels || hotelRecommendations.length > 0) && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-2xl font-bold font-display flex items-center gap-2">
+                        <Users2 className="w-6 h-6 text-brand-primary" /> Recommended Hotels
+                      </h3>
+                      {loadingHotels && <Loader2 className="w-5 h-5 animate-spin text-brand-primary" />}
+                    </div>
+                    
+                    <div className="grid md:grid-cols-1 gap-6">
+                      {loadingHotels ? (
+                        [1, 2, 3].map(i => (
+                          <GlassCard key={i} className="h-48 animate-pulse bg-white/5">
+                            <div className="w-full h-full" />
+                          </GlassCard>
+                        ))
+                      ) : (
+                        hotelRecommendations.map((hotel, i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                          >
+                            <GlassCard className="overflow-hidden p-0 flex flex-col md:flex-row">
+                              <div className="w-full md:w-64 h-48 md:h-auto relative">
+                                <img 
+                                  src={`https://picsum.photos/seed/${encodeURIComponent(hotel.name)}/800/600`}
+                                  alt={hotel.name}
+                                  className="w-full h-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-[10px] font-bold uppercase tracking-widest text-brand-secondary">
+                                  Recommended
+                                </div>
+                              </div>
+                              <div className="flex-1 p-6 space-y-4">
+                                <div>
+                                  <h4 className="text-xl font-bold">{hotel.name}</h4>
+                                  <p className="text-sm text-white/50 mt-1">{hotel.description}</p>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                    <p className="text-[10px] uppercase font-bold tracking-widest text-white/30">Available Spaces</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {hotel.spaces?.map((space: any, si: number) => (
+                                        <div key={si} className="px-2 py-1 bg-white/5 rounded-lg text-[10px] border border-white/10">
+                                          <span className="font-bold text-brand-primary">{space.type}</span>
+                                          <span className="text-white/40 ml-1">({space.capacity} guests)</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <p className="text-[10px] uppercase font-bold tracking-widest text-white/30">Amenities</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {hotel.amenities?.map((amenity: string, ai: number) => (
+                                        <span key={ai} className="text-[10px] text-white/60 flex items-center gap-1">
+                                          <CheckCircle2 className="w-3 h-3 text-brand-secondary" /> {amenity}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                                  <div>
+                                    <p className="text-[10px] uppercase font-bold tracking-widest text-white/30">Est. Starting Price</p>
+                                    <p className="text-xl font-bold text-brand-secondary">₹{Number(hotel.estimatedPrice).toLocaleString()}</p>
+                                  </div>
+                                  <button className="btn-primary py-2 px-6 text-xs">Check Availability</button>
+                                </div>
+                              </div>
+                            </GlassCard>
+                          </motion.div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
 

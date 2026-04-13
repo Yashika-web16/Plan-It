@@ -6,6 +6,9 @@ const getApiKey = () => {
               (import.meta.env?.VITE_GEMINI_API_KEY as string) || 
               "";
   
+  if (!key) {
+    throw new Error("AI API Key is missing. \n\nTo fix this:\n\nOn Localhost:\n1. Create a '.env' file.\n2. Add 'VITE_GEMINI_API_KEY=your_key'\n\nOn Vercel:\n1. Go to Project Settings > Environment Variables.\n2. Add 'VITE_GEMINI_API_KEY' with your Gemini API key.\n3. Redeploy your app.");
+  }
   return key;
 };
 
@@ -40,9 +43,6 @@ export const aiService = {
   async getVenueRecommendations(budget: number, location: string, theme: string, guestCount: number) {
     return callAiWithRetry(async (useLite) => {
       const apiKey = getApiKey();
-      if (!apiKey) {
-        throw new Error("AI API Key is missing. \n\nTo fix this on localhost:\n1. Create a file named '.env' in the root folder.\n2. Add 'VITE_GEMINI_API_KEY=your_key_here' to it.\n3. Restart your dev server.");
-      }
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
@@ -59,9 +59,6 @@ export const aiService = {
   async generateInvitation(eventDetails: any) {
     return callAiWithRetry(async (useLite) => {
       const apiKey = getApiKey();
-      if (!apiKey) {
-        throw new Error("AI API Key is missing. \n\nTo fix this on localhost:\n1. Create a file named '.env' in the root folder.\n2. Add 'VITE_GEMINI_API_KEY=your_key_here' to it.\n3. Restart your dev server.");
-      }
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
@@ -77,9 +74,6 @@ export const aiService = {
   async chatAssistant(message: string, history: any[]) {
     return callAiWithRetry(async (useLite) => {
       const apiKey = getApiKey();
-      if (!apiKey) {
-        throw new Error("AI API Key is missing. \n\nTo fix this on localhost:\n1. Create a file named '.env' in the root folder.\n2. Add 'VITE_GEMINI_API_KEY=your_key_here' to it.\n3. Restart your dev server.");
-      }
       const ai = new GoogleGenAI({ apiKey });
       const chat = ai.chats.create({
         model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
@@ -97,9 +91,6 @@ export const aiService = {
   async getStructuredPlan(eventDetails: any) {
     return callAiWithRetry(async (useLite) => {
       const apiKey = getApiKey();
-      if (!apiKey) {
-        throw new Error("AI API Key is missing. \n\nTo fix this on localhost:\n1. Create a file named '.env' in the root folder.\n2. Add 'VITE_GEMINI_API_KEY=your_key_here' to it.\n3. Restart your dev server.");
-      }
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
@@ -125,12 +116,34 @@ export const aiService = {
     });
   },
 
+  async getHotelRecommendations(location: string, guestCount: number, theme: string) {
+    return callAiWithRetry(async (useLite) => {
+      const apiKey = getApiKey();
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
+        contents: `Suggest 3 real luxury hotels in ${location} that would be suitable for a ${theme} event with ${guestCount} guests. 
+        For each hotel, provide:
+        - "name": Full name of the hotel.
+        - "description": A brief 1-2 sentence description.
+        - "spaces": An array of objects with "type" (e.g., "Grand Ballroom", "Rooftop Garden", "Poolside Deck") and "capacity" (number of guests).
+        - "amenities": An array of 3-4 key amenities.
+        - "estimatedPrice": A starting price in ₹ for booking a space.
+        
+        Return the result in JSON format as an array of objects.
+        Return ONLY the JSON array.`,
+        config: {
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        }
+      });
+      return JSON.parse(response.text || "[]");
+    });
+  },
+
   async generateScavengerHunt(eventDetails: any) {
     return callAiWithRetry(async (useLite) => {
       const apiKey = getApiKey();
-      if (!apiKey) {
-        throw new Error("AI API Key is missing.");
-      }
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
