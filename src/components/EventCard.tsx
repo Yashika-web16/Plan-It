@@ -16,87 +16,62 @@ export const EventCard = ({ event }: EventCardProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleBookNow = async () => {
-    if (event.category === "Movie" || event.title.includes("Dhurandhar")) {
-      setIsModalOpen(true);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch("/api/create-checkout-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          eventId: event.id,
-          title: event.title,
-          price: event.price,
-          image: event.images[0] || `https://picsum.photos/seed/${event.id}/800/450`,
-        }),
-      });
-
-      const { id } = await response.json();
-      const stripe = await loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) as any;
-      
-      if (stripe) {
-        const { error } = await stripe.redirectToCheckout({ sessionId: id });
-        if (error) console.error(error);
-      }
-    } catch (error) {
-      console.error("Booking error:", error);
-      alert("Failed to initiate booking. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    // For this demo, we use the internal BookingModal for all events
+    // to ensure a smooth experience without external Stripe configuration.
+    setIsModalOpen(true);
   };
 
   return (
     <>
-      <GlassCard className="flex flex-col h-full">
-        <div className="relative aspect-video rounded-2xl overflow-hidden mb-4">
+      <GlassCard className="flex flex-col h-full p-0 overflow-hidden border-white/[0.05]">
+        <div className="relative aspect-[16/10] overflow-hidden">
           <img
             src={event.images[0] || `https://picsum.photos/seed/${event.id}/800/450`}
             alt={event.title}
-            className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-110"
+            className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-105"
             referrerPolicy="no-referrer"
           />
-          <div className="absolute top-3 right-3 px-3 py-1 rounded-full glass-dark text-xs font-medium">
-            {event.category}
+          <div className="absolute top-4 left-4">
+            <span className="mono-tag bg-black/40 backdrop-blur-md border-white/10 text-white">
+              {event.category}
+            </span>
           </div>
         </div>
         
-        <div className="flex-1">
-          <h3 className="text-xl font-bold mb-2 font-display">{event.title}</h3>
+        <div className="p-8 flex-1 flex flex-col">
+          <h3 className="text-2xl font-bold mb-4 font-display tracking-tight leading-tight">{event.title}</h3>
           
-          <div className="space-y-2 text-sm text-white/70">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-brand-primary" />
+          <div className="space-y-3 text-sm text-white/40 font-medium">
+            <div className="flex items-center gap-3">
+              <Calendar className="w-4 h-4 text-white/20" />
               <span>{event.date} • {event.time}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-brand-secondary" />
+            <div className="flex items-center gap-3">
+              <MapPin className="w-4 h-4 text-white/20" />
               <span>{event.location}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-brand-accent" />
-              <span>{event.bookedCount}/{event.capacity} Booked</span>
+            <div className="flex items-center gap-3">
+              <Users className="w-4 h-4 text-white/20" />
+              <span className="font-mono text-[10px] uppercase tracking-wider">{event.bookedCount}/{event.capacity} Booked</span>
             </div>
           </div>
-        </div>
-        
-        <div className="mt-6 flex items-center justify-between">
-          <span className="text-2xl font-bold text-brand-primary">
-            ₹{event.price}
-          </span>
-          <button
-            onClick={handleBookNow}
-            disabled={loading}
-            className="btn-primary py-2 px-4 text-sm flex items-center gap-2"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Book Now
-          </button>
+
+          <div className="mt-8 pt-6 border-t border-white/[0.05] flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-widest text-white/20 font-bold">Price</span>
+              <span className="text-2xl font-bold text-white">
+                ₹{event.price}
+              </span>
+            </div>
+            <button
+              onClick={handleBookNow}
+              disabled={loading}
+              className="btn-primary py-3 px-6 text-xs uppercase tracking-widest flex items-center gap-2"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              Book
+            </button>
+          </div>
         </div>
       </GlassCard>
 
