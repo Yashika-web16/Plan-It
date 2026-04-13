@@ -1,17 +1,22 @@
-import { Calendar, MapPin, CheckCircle, Clock, XCircle, Navigation, FileText, Sparkles } from "lucide-react";
+import { Calendar, MapPin, CheckCircle, Clock, XCircle, Navigation, FileText, Sparkles, Trash2 } from "lucide-react";
 import { Booking } from "../types";
 import { GlassCard } from "./GlassCard";
 import { useState } from "react";
 import { PlanModal } from "./PlanModal";
+import { Link } from "react-router-dom";
+import { useAuth } from "../AuthContext";
 
 interface BookingCardProps {
   booking: Booking;
   title: string;
   location: string;
+  onDelete?: () => void;
 }
 
-export const BookingCard = ({ booking, title, location }: BookingCardProps) => {
+export const BookingCard = ({ booking, title, location, onDelete }: BookingCardProps) => {
+  const { user } = useAuth();
   const [showPlan, setShowPlan] = useState(false);
+  const isOrganizer = user?.uid === booking.userId;
   const statusColors = {
     confirmed: "text-brand-secondary",
     pending: "text-brand-accent",
@@ -47,7 +52,15 @@ export const BookingCard = ({ booking, title, location }: BookingCardProps) => {
           <h3 className="font-bold text-lg capitalize">{displayTitle}</h3>
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-white/50 mt-1">
             <div className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> {displayLocation}
+              <MapPin className="w-3 h-3" /> 
+              <span>{displayLocation}</span>
+              <button 
+                onClick={handleGetDirections}
+                className="ml-1 p-1 hover:bg-white/10 rounded-full transition-colors"
+                title="View on Map"
+              >
+                <Navigation className="w-2 h-2 text-brand-primary" />
+              </button>
             </div>
             <div className="flex items-center gap-1">
               <Calendar className="w-3 h-3" /> {new Date(booking.date).toLocaleDateString()}
@@ -55,12 +68,22 @@ export const BookingCard = ({ booking, title, location }: BookingCardProps) => {
           </div>
           
           {booking.type === 'plan' ? (
-            <button 
-              onClick={() => setShowPlan(true)}
-              className="mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-secondary hover:text-brand-secondary/80 transition-colors"
-            >
-              <FileText className="w-3 h-3" /> View Detailed Plan
-            </button>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setShowPlan(true)}
+                className="mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-secondary hover:text-brand-secondary/80 transition-colors"
+              >
+                <FileText className="w-3 h-3" /> View Detailed Plan
+              </button>
+              {isOrganizer && (
+                <Link 
+                  to={`/plan/${booking.id}`}
+                  className="mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-primary hover:text-brand-primary/80 transition-colors"
+                >
+                  <Sparkles className="w-3 h-3" /> Edit Plan
+                </Link>
+              )}
+            </div>
           ) : booking.status === 'confirmed' && (
             <button 
               onClick={handleGetDirections}
@@ -78,11 +101,24 @@ export const BookingCard = ({ booking, title, location }: BookingCardProps) => {
           <span className="text-xl font-bold font-display">
             ₹{Number(booking.totalAmount).toLocaleString()}
           </span>
+          {onDelete && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="mt-2 p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest"
+              title="Delete Booking"
+            >
+              <Trash2 className="w-3 h-3" /> Delete
+            </button>
+          )}
         </div>
       </GlassCard>
 
       {showPlan && booking.details && (
         <PlanModal 
+          bookingId={booking.id}
           plan={booking.details} 
           onClose={() => setShowPlan(false)} 
         />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { User, Layout, Calendar, BarChart3, Settings, LogOut, Sparkles, Database, Table as TableIcon, Search, MapPin, Hotel as HotelIcon, PlusCircle } from "lucide-react";
+import { User, Layout, Calendar, BarChart3, Settings, LogOut, Sparkles, Database, Table as TableIcon, Search, MapPin, Hotel as HotelIcon, PlusCircle, Trophy } from "lucide-react";
 import { GlassCard, cn } from "../components/GlassCard";
 import { BookingCard } from "../components/BookingCard";
 import { AdminContentForm } from "../components/AdminContentForm";
@@ -7,7 +7,7 @@ import { SettingsForm } from "../components/SettingsForm";
 import { motion } from "framer-motion";
 import { useAuth } from "../AuthContext";
 import { db, handleFirestoreError, OperationType } from "../firebase";
-import { collection, query, where, onSnapshot, addDoc, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { Booking, Event, Venue, Hotel } from "../types";
 import { Link } from "react-router-dom";
 
@@ -23,15 +23,47 @@ export const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Bookings
-    const q = query(collection(db, "bookings"), where("userId", "==", user.uid));
+    // Bookings - Query for events where user is a participant (owner or guest)
+    // We check both participantIds and userId for backward compatibility and robustness
+    const q = query(
+      collection(db, "bookings"), 
+      where("participantIds", "array-contains", user.uid)
+    );
+    
+    // We also fetch where userId == user.uid and merge them to be safe
+    const q2 = query(
+      collection(db, "bookings"),
+      where("userId", "==", user.uid)
+    );
+
     const unsubscribeBookings = onSnapshot(q, (snapshot) => {
-      const bookingsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Booking[];
-      setBookings(bookingsData);
-      setLoading(false);
+      const pBookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Booking[];
+      
+      getDocs(q2).then(ownerSnap => {
+        const oBookings = ownerSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Booking[];
+        
+        // Merge all bookings
+        const allBookings = [...pBookings, ...oBookings];
+        
+        // Deduplicate by eventId to ensure a unique list of events
+        // If eventId is missing (e.g. custom plan), fallback to document id
+        const uniqueMap = new Map();
+        allBookings.forEach(booking => {
+          const key = booking.eventId || booking.id;
+          // Keep the most recent booking if there are duplicates for the same event
+          if (!uniqueMap.has(key) || new Date(booking.createdAt || 0) > new Date(uniqueMap.get(key).createdAt || 0)) {
+            uniqueMap.set(key, booking);
+          }
+        });
+        
+        const uniqueBookings = Array.from(uniqueMap.values());
+        
+        // Sort by date descending
+        uniqueBookings.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        setBookings(uniqueBookings);
+        setLoading(false);
+      });
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "bookings");
       setLoading(false);
@@ -65,6 +97,19 @@ export const Dashboard = () => {
       unsubscribeHotels();
     };
   }, [user]);
+
+  const handleDeleteBooking = async (bookingId: string) => {
+    if (!window.confirm("Are you sure you want to delete this booking? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, "bookings", bookingId));
+      // The onSnapshot will automatically update the UI
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, "bookings");
+    }
+  };
 
   const seedData = async () => {
     try {
@@ -209,6 +254,16 @@ export const Dashboard = () => {
             <Sparkles className="w-8 h-8 text-brand-primary mb-4" />
             <h3 className="font-bold mb-2">Pro Planner</h3>
             <p className="text-xs text-white/50 mb-4">Unlock AI-powered event management and premium venues.</p>
+            
+            <div className="p-4 rounded-xl bg-white/5 border border-white/10 mb-6">
+              <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Your Rewards</p>
+              <div className="flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-brand-primary" />
+                <p className="text-xl font-bold text-brand-primary">{user.points || 0} PTS</p>
+              </div>
+              <p className="text-[8px] text-white/30 mt-1">* Use points for discounts in Discover!</p>
+            </div>
+
             <button className="w-full btn-primary py-2 text-xs">Upgrade Now</button>
           </GlassCard>
         </div>
@@ -248,6 +303,7 @@ export const Dashboard = () => {
                       booking={booking}
                       title={booking.eventId ? "Event Ticket" : "Venue Booking"}
                       location={booking.location || "Check details"}
+                      onDelete={() => handleDeleteBooking(booking.id)}
                     />
                   </motion.div>
                 ))

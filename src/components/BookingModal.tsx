@@ -41,6 +41,7 @@ export const BookingModal = ({ event, isOpen, onClose }: BookingModalProps) => {
     try {
       await addDoc(collection(db, "bookings"), {
         userId: user.uid,
+        participantIds: [user.uid], // Ensure it shows up in the dashboard query
         eventId: event.id,
         eventTitle: event.title,
         venue: selectedCinema,

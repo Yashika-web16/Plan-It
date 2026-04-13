@@ -4,6 +4,7 @@ import { Home } from "./pages/Home";
 import { PlanEvent } from "./pages/PlanEvent";
 import { Discover } from "./pages/Discover";
 import { VendorSearch } from "./pages/VendorSearch";
+import { RSVP } from "./pages/RSVP";
 import { Dashboard } from "./pages/Dashboard";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -17,7 +18,9 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/discover" element={<Discover />} />
             <Route path="/plan" element={<PlanEvent />} />
+            <Route path="/plan/:bookingId" element={<PlanEvent />} />
             <Route path="/vendors" element={<VendorSearch />} />
+            <Route path="/rsvp/:bookingId" element={<RSVP />} />
             <Route path="/dashboard" element={<Dashboard />} />
           </Routes>
         </AnimatePresence>

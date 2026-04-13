@@ -7,6 +7,7 @@ export interface User {
   role: UserRole;
   photoURL?: string;
   createdAt: string;
+  points?: number;
 }
 
 export interface Event {
@@ -59,6 +60,8 @@ export interface Booking {
   totalAmount: number;
   date: string;
   details?: any;
+  participantIds?: string[];
+  createdAt?: string;
 }
 
 export interface PlanItem {
@@ -67,11 +70,18 @@ export interface PlanItem {
   timeline?: string;
 }
 
+export interface CateringPlateDetail {
+  type: 'Veg' | 'Non-Veg' | 'Kids' | 'Adults' | 'Aged';
+  count: number;
+  costPerPlate: number;
+}
+
 export interface BudgetItem {
   category: string;
   estimatedCost: number;
   actualCost?: number;
   priority: 'High' | 'Medium' | 'Low';
+  cateringDetails?: CateringPlateDetail[];
 }
 
 export interface Guest {
@@ -79,8 +89,9 @@ export interface Guest {
   name: string;
   email: string;
   phone?: string;
-  status: 'Pending' | 'Invited' | 'Confirmed' | 'Declined';
+  status: 'Pending' | 'Invited' | 'Attending' | 'Declined';
   invitedAt?: string;
+  wantsScavenger?: boolean;
 }
 
 export interface ScavengerMission {
@@ -89,4 +100,26 @@ export interface ScavengerMission {
   description: string;
   points: number;
   completed?: boolean;
+}
+
+export interface ScavengerSubmission {
+  id: string;
+  eventId: string;
+  missionId: string;
+  userId: string;
+  userName: string;
+  userPhoto?: string;
+  proofType: 'image' | 'text';
+  proofValue: string;
+  pointsAwarded: number;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export interface LeaderboardEntry {
+  userId: string;
+  userName: string;
+  userPhoto?: string;
+  totalPoints: number;
+  completedCount: number;
 }

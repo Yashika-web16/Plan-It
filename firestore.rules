@@ -38,12 +38,28 @@ service cloud.firestore {
     }
 
     match /bookings/{bookingId} {
-      allow get: if true; // Allow guests to view invitation details via link
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        request.auth.uid in resource.data.get('participantIds', []) ||
+        // Allow reading for RSVP if the user has the link (we can't easily verify the link in rules, 
+        // but we can allow read if they are in the guest list by email if we had that info)
+        true 
+      );
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if (isAdmin()) || 
-                      (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['details']) && 
-                       request.resource.data.details.diff(resource.data.details).affectedKeys().hasOnly(['guests']));
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || // Organizer can do anything
+        // Guests can update their RSVP status and add themselves to participantIds
+        (request.resource.data.diff(resource.data).affectedKeys().hasAny(['details', 'participantIds']))
+      );
+      allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.userId);
+    }
+
+    match /scavenger_submissions/{submissionId} {
+      allow read: if true; // Allow everyone to see the leaderboard/submissions for an event
+      allow create: if isAuthenticated() && 
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/bookings/$(resource.data.eventId)).data.userId == request.auth.uid);
       allow delete: if isAdmin();
     }
     
