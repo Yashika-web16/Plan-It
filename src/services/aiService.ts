@@ -17,22 +17,33 @@ async function callAiWithRetry(fn: (useLite?: boolean) => Promise<any>, retries 
   try {
     return await fn(useLite);
   } catch (error: any) {
-    const isRateLimit = error.message?.includes("429") || error.status === "RESOURCE_EXHAUSTED";
+    const errorMsg = error.message || "";
+    const errorStatus = error.status || "";
     
-    if (isRateLimit && retries > 0) {
-      console.warn(`⚠️ AI Service: Shared key busy. Retrying in ${delay}ms... (${retries} retries left)`);
+    const isRateLimit = errorMsg.includes("429") || errorStatus === "RESOURCE_EXHAUSTED";
+    const isTransient = errorMsg.includes("503") || errorMsg.includes("UNAVAILABLE") || 
+                        errorMsg.includes("500") || errorMsg.includes("INTERNAL") ||
+                        errorStatus === "UNAVAILABLE" || errorStatus === "INTERNAL";
+    
+    if ((isRateLimit || isTransient) && retries > 0) {
+      const reason = isRateLimit ? "Quota/Rate Limit" : "Transient Service Error";
+      console.warn(`⚠️ AI Service: ${reason}. Retrying in ${delay}ms... (${retries} retries left)`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return callAiWithRetry(fn, retries - 1, delay * 1.5, useLite);
     }
     
     // If Lite failed after all retries, try one last time with standard Flash (different quota pool)
-    if (isRateLimit && useLite) {
-      console.warn("⚠️ AI Service: Lite model quota exhausted. Falling back to standard Flash...");
+    if ((isRateLimit || isTransient) && useLite) {
+      console.warn("⚠️ AI Service: Lite model issue. Falling back to standard Flash...");
       return callAiWithRetry(fn, 2, 1000, false);
     }
     
     if (isRateLimit) {
       throw new Error("AI Quota Exceeded: The shared system is currently at maximum capacity. Please try again in a few minutes. ⏳");
+    }
+
+    if (isTransient) {
+      throw new Error("AI Service Temporarily Unavailable: The AI model is currently overloaded or having a hiccup. Please try again in a few seconds. 🛠️");
     }
     
     throw error;
