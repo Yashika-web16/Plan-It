@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, MapPin, Star, Loader2, AlertCircle, Sparkles, Info } from "lucide-react";
 import Markdown from "react-markdown";
+import { aiService } from "../services/aiService";
 
 export const VendorSearch = () => {
   const [query, setQuery] = useState("");
@@ -11,56 +11,19 @@ export const VendorSearch = () => {
   const [results, setResults] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const searchVendors = async (retries = 4, delay = 2000) => {
+  const searchVendors = async () => {
     if (!query.trim()) return;
     
     setIsSearching(true);
     setError(null);
-    if (retries === 4) {
-      setResults(null);
-    }
+    setResults(null);
     
     try {
-      const apiKey = (import.meta.env.VITE_GEMINI_API_KEY as string) || (process.env.GEMINI_API_KEY as string);
-      if (!apiKey) {
-        throw new Error("AI API Key is missing. \n\nTo fix this on localhost:\n1. Create a file named '.env' in the root folder.\n2. Add 'VITE_GEMINI_API_KEY=your_key_here' to it.\n3. Restart your dev server.");
-      }
-      
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `Find recommended vendors for: ${query}${location ? ` in ${location}` : ""}. 
-      Provide a detailed list of top-rated professionals with:
-      - Vendor Name
-      - Estimated Rating (based on general reputation)
-      - Key Services
-      - Why they are recommended
-      - A general price range if known.
-      
-      Format the output beautifully using Markdown with clear headings and bullet points.`;
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-lite-preview",
-        contents: prompt,
-        config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-        },
-      });
-
-      setResults(response.text || "No results found.");
+      const response = await aiService.getVendorRecommendations(query, location);
+      setResults(response);
     } catch (err: any) {
       console.error("Search error:", err);
-      const isRateLimit = err.message?.includes("429") || err.status === "RESOURCE_EXHAUSTED" || err.message?.includes("quota");
-      
-      if (isRateLimit && retries > 0) {
-        console.warn(`⚠️ Vendor Search: System busy. Retrying in ${delay}ms... (${retries} left)`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return searchVendors(retries - 1, delay * 1.5);
-      }
-
-      if (isRateLimit) {
-        setError("AI Quota Exceeded: The shared system is currently at maximum capacity. Please wait a minute and try again. ⏳");
-      } else {
-        setError(err.message || "Failed to search vendors. Please try again.");
-      }
+      setError(err.message || "Failed to search vendors. Please try again.");
     } finally {
       setIsSearching(false);
     }
@@ -87,33 +50,33 @@ export const VendorSearch = () => {
       </div>
 
       <div className="max-w-4xl mx-auto mb-12">
-        <div className="glass p-4 rounded-3xl border border-white/10 flex flex-col md:flex-row gap-4 shadow-2xl">
+        <div className="bento-card p-4 flex flex-col md:flex-row gap-4 shadow-2xl">
           <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && searchVendors()}
-              placeholder="What are you looking for? (e.g., Wedding Photographers, Catering)"
-              className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition-all"
+              placeholder="What are you looking for?"
+              className="w-full bg-white/5 border border-white/10 rounded-full py-5 pl-14 pr-6 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
             />
           </div>
           <div className="flex-1 relative">
-            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+            <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20" />
             <input
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && searchVendors()}
-              placeholder="Location (optional)"
-              className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition-all"
+              placeholder="Location"
+              className="w-full bg-white/5 border border-white/10 rounded-full py-5 pl-14 pr-6 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
             />
           </div>
           <button
             onClick={() => searchVendors()}
             disabled={isSearching || !query.trim()}
-            className="btn-primary px-8 py-4 text-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary px-10 py-5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSearching ? (
               <Loader2 className="w-6 h-6 animate-spin" />
@@ -125,9 +88,9 @@ export const VendorSearch = () => {
             )}
           </button>
         </div>
-        <p className="text-xs text-white/30 mt-4 flex items-center gap-1 justify-center">
+        <p className="mono-tag mt-6 mx-auto w-fit flex items-center gap-2">
           <Info className="w-3 h-3" />
-          Recommendations are generated by AI based on general industry data
+          AI-generated recommendations
         </p>
       </div>
 
@@ -170,8 +133,8 @@ export const VendorSearch = () => {
             animate={{ opacity: 1, y: 0 }}
             className="max-w-4xl mx-auto"
           >
-            <div className="glass p-8 rounded-3xl border border-white/10">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <div className="bento-card">
+              <h2 className="text-2xl font-bold mb-8 flex items-center gap-3">
                 <Sparkles className="w-6 h-6 text-brand-primary" />
                 Top Recommendations
               </h2>

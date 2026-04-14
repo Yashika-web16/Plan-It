@@ -152,6 +152,31 @@ export const aiService = {
     });
   },
 
+  async getVendorRecommendations(query: string, location: string) {
+    return callAiWithRetry(async (useLite) => {
+      const apiKey = getApiKey();
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Find recommended vendors for: ${query}${location ? ` in ${location}` : ""}. 
+      Provide a detailed list of top-rated professionals with:
+      - Vendor Name
+      - Estimated Rating (based on general reputation)
+      - Key Services
+      - Why they are recommended
+      - A general price range if known.
+      
+      Format the output beautifully using Markdown with clear headings and bullet points.`;
+
+      const response = await ai.models.generateContent({
+        model: useLite ? "gemini-3.1-flash-lite-preview" : "gemini-flash-latest",
+        contents: prompt,
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        },
+      });
+      return response.text || "No results found.";
+    });
+  },
+
   async generateScavengerHunt(eventDetails: any) {
     return callAiWithRetry(async (useLite) => {
       const apiKey = getApiKey();
