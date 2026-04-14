@@ -752,7 +752,12 @@ export const PlanEvent = () => {
                                     <p className="text-[10px] uppercase font-bold tracking-widest text-white/30">Est. Starting Price</p>
                                     <p className="text-xl font-bold text-brand-secondary">₹{Number(hotel.estimatedPrice).toLocaleString()}</p>
                                   </div>
-                                  <button className="btn-primary py-2 px-6 text-xs">Check Availability</button>
+                                  <button 
+                                    onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(hotel.name + ' ' + formData.location + ' booking availability')}`, '_blank')}
+                                    className="btn-primary py-2 px-6 text-xs"
+                                  >
+                                    Check Availability
+                                  </button>
                                 </div>
                               </div>
                             </GlassCard>
